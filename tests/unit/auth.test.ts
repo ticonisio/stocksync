@@ -31,6 +31,19 @@ type ProviderWithOptions = {
 const provider = authOptions.providers[0] as unknown as ProviderWithOptions;
 const authorize = provider.options.authorize;
 
+describe('NextAuth authOptions providers', () => {
+  it('includes Google provider', () => {
+    const googleProvider = authOptions.providers.find(
+      (p) => (p as any).id === 'google'
+    );
+    expect(googleProvider).toBeDefined();
+  });
+
+  it('has newUser page configured', () => {
+    expect(authOptions.pages?.newUser).toBe('/onboarding/connect-shopify');
+  });
+});
+
 describe('NextAuth Credentials authorize()', () => {
   beforeEach(() => {
     vi.clearAllMocks();

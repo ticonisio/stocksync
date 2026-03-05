@@ -1,6 +1,6 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-// GoogleProvider will be added in Story 1.3
+import GoogleProvider from 'next-auth/providers/google';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -30,7 +30,10 @@ export const authOptions: NextAuthOptions = {
         return { id: user.id, email: user.email, name: user.name };
       },
     }),
-    // GoogleProvider — Story 1.3
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
   ],
   callbacks: {
     jwt({ token, user }) {
@@ -44,5 +47,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
+    newUser: '/onboarding/connect-shopify',
   },
 };
