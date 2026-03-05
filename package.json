@@ -12,7 +12,10 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
+    "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^5.22.0",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-virtual": "^3.13.19",
     "bcryptjs": "^3.0.3",
@@ -24,6 +27,7 @@
     "prisma": "^5.22.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-hook-form": "^7.71.2",
     "swr": "^2.4.1",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
