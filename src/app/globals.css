@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+
+
+@layer base {
+  /* StockSync — Dark mode as default (front-end-spec Section 6) */
+  :root {
+    --background: 0 0% 4%;        /* #0a0a0a */
+    --foreground: 0 0% 93%;       /* #ededed */
+    --card: 0 0% 7%;              /* #111111 */
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 217 91% 60%;       /* #3b82f6 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;        /* #1f1f1f */
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 45%; /* #737373 */
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 93%;
+    --destructive: 0 84% 60%;     /* #ef4444 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 12%;           /* #1f1f1f */
+    --input: 0 0% 12%;
+    --ring: 217 91% 60%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 93%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 217 91% 60%;
+  }
+}
