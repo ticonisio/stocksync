@@ -70,6 +70,8 @@ model Store {
   accessTokenEncrypted String          @db.Text
   webhooksRegistered   Boolean         @default(false)
   syncStatus           SyncStatus      @default(PENDING)
+  syncTotal            Int?
+  syncDone             Int?
   lastSyncedAt         DateTime?
   user                 User            @relation(fields: [userId], references: [id])
   products             Product[]
