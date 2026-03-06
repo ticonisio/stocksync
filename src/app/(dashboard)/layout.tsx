@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
-import { SessionProvider } from 'next-auth/react';
+import { AuthSessionProvider } from '@/components/providers/session-provider';
 import { Sidebar } from '@/components/layout/sidebar';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -9,13 +9,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session) redirect('/login');
 
   return (
-    <SessionProvider>
+    <AuthSessionProvider>
       <div className="flex h-screen bg-background">
         <Sidebar />
         <main className="flex-1 overflow-auto p-6">
           {children}
         </main>
       </div>
-    </SessionProvider>
+    </AuthSessionProvider>
   );
 }

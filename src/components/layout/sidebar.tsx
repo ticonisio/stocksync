@@ -23,7 +23,7 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex flex-col w-56 border-r border-border bg-card">
       <div className="p-4 border-b border-border">
-        <span className="text-lg font-semibold">StockSync</span>
+        <span className="text-xl font-bold text-foreground tracking-tight">StockSync</span>
       </div>
 
       <nav className="flex-1 p-2 space-y-1">
@@ -58,7 +58,7 @@ export function Sidebar() {
         </div>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+          className="w-full justify-start gap-2 !text-foreground hover:!text-destructive hover:bg-destructive/10"
           onClick={() => signOut({ callbackUrl: '/login' })}
         >
           <LogOut className="h-4 w-4" />
