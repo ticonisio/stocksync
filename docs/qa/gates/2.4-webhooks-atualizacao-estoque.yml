@@ -1,0 +1,12 @@
+schema: 1
+story: '2.4'
+gate: CONCERNS
+status_reason: 'Todos os 8 ACs implementados e testados. Um concern de confiabilidade: WebhookEvent é persistido antes do processamento, causando perda silenciosa em caso de falha durante retry da Shopify.'
+reviewer: 'Quinn'
+updated: '2026-03-06T10:15:00Z'
+top_issues:
+  - id: 'REL-001'
+    severity: medium
+    finding: 'WebhookEvent criado antes de processOrderPaid/processOrderCancelled. Se o processamento falha com exceção (ex: DB timeout), retorna 500 mas o evento fica marcado como processado. Na retry da Shopify, a checagem de idempotência retorna 200 sem processar — estoque não é atualizado.'
+    suggested_action: 'Envolver WebhookEvent.create + processamento em transação, ou mover o create para após o processamento bem-sucedido. Prioridade: pós-MVP.'
+waiver: { active: false }

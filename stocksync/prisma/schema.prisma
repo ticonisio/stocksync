@@ -1,0 +1,234 @@
+// StockSync — Prisma Schema
+// Source: docs/architecture.md Section 9
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── NextAuth tables ───────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  accounts      Account[]
+  sessions      Session[]
+  stores        Store[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Application tables ────────────────────────────────────────────────────
+
+model Store {
+  id                   String          @id @default(cuid())
+  userId               String
+  shopifyDomain        String
+  accessTokenEncrypted String          @db.Text
+  webhooksRegistered   Boolean         @default(false)
+  syncStatus           SyncStatus      @default(PENDING)
+  syncTotal            Int?
+  syncDone             Int?
+  lastSyncedAt         DateTime?
+  user                 User            @relation(fields: [userId], references: [id])
+  products             Product[]
+  collections          Collection[]
+  webhookEvents        WebhookEvent[]
+  leadTimeGroups       LeadTimeGroup[]
+  salesVelocities      SalesVelocity[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@unique([userId, shopifyDomain])
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCING
+  COMPLETE
+  ERROR
+}
+
+model Product {
+  id               String                 @id @default(cuid())
+  storeId          String
+  shopifyProductId String
+  title            String
+  handle           String
+  leadTimeOverride Int?
+  store            Store                  @relation(fields: [storeId], references: [id])
+  variants         Variant[]
+  collections      ProductCollection[]
+  leadTimeGroups   ProductLeadTimeGroup[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@unique([storeId, shopifyProductId])
+  @@index([storeId])
+}
+
+model Variant {
+  id               String          @id @default(cuid())
+  productId        String
+  storeId          String
+  shopifyVariantId String
+  title            String
+  sku              String?
+  availableStock   Int             @default(0)
+  reservedStock    Int             @default(0)
+  committedStock   Int             @default(0)
+  product          Product         @relation(fields: [productId], references: [id])
+  orderItems       OrderItem[]
+  salesVelocities  SalesVelocity[]
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([storeId, shopifyVariantId])
+  @@index([storeId])
+  @@index([productId])
+}
+
+model Collection {
+  id                  String              @id @default(cuid())
+  storeId             String
+  shopifyCollectionId String
+  title               String
+  handle              String
+  store               Store               @relation(fields: [storeId], references: [id])
+  products            ProductCollection[]
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([storeId, shopifyCollectionId])
+}
+
+model ProductCollection {
+  productId    String
+  collectionId String
+  product      Product    @relation(fields: [productId], references: [id])
+  collection   Collection @relation(fields: [collectionId], references: [id])
+
+  @@id([productId, collectionId])
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  storeId        String
+  shopifyOrderId String
+  status         OrderStatus @default(PENDING)
+  items          OrderItem[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([storeId, shopifyOrderId])
+  @@index([storeId])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  variantId String
+  quantity  Int
+  order     Order   @relation(fields: [orderId], references: [id])
+  variant   Variant @relation(fields: [variantId], references: [id])
+
+  @@index([variantId])
+}
+
+model WebhookEvent {
+  id             String   @id @default(cuid())
+  storeId        String
+  shopifyOrderId String
+  eventType      String
+  rawPayload     Json
+  processedAt    DateTime @default(now())
+  store          Store    @relation(fields: [storeId], references: [id])
+
+  @@unique([storeId, shopifyOrderId, eventType])
+  @@index([storeId])
+}
+
+model LeadTimeGroup {
+  id           String                 @id @default(cuid())
+  storeId      String
+  name         String
+  leadTimeDays Int
+  bufferDays   Int?
+  store        Store                  @relation(fields: [storeId], references: [id])
+  products     ProductLeadTimeGroup[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+}
+
+model ProductLeadTimeGroup {
+  productId       String
+  leadTimeGroupId String
+  product         Product       @relation(fields: [productId], references: [id])
+  leadTimeGroup   LeadTimeGroup @relation(fields: [leadTimeGroupId], references: [id])
+
+  @@id([productId, leadTimeGroupId])
+}
+
+model SalesVelocity {
+  id             String   @id @default(cuid())
+  variantId      String
+  storeId        String
+  period         String
+  unitsSold      Int
+  velocityPerDay Float
+  calculatedAt   DateTime @default(now())
+  variant        Variant  @relation(fields: [variantId], references: [id])
+  store          Store    @relation(fields: [storeId], references: [id])
+
+  @@unique([variantId, period])
+  @@index([storeId])
+}

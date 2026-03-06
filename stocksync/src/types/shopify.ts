@@ -1,0 +1,26 @@
+export interface ShopifyProduct {
+  id: number;
+  title: string;
+  handle: string;
+  variants: ShopifyVariant[];
+}
+
+export interface ShopifyVariant {
+  id: number;
+  product_id: number;
+  title: string;
+  sku: string | null;
+  inventory_quantity: number;
+}
+
+export interface ShopifyCollection {
+  id: number;
+  title: string;
+  handle: string;
+}
+
+export interface ShopifyCollect {
+  id: number;
+  product_id: number;
+  collection_id: number;
+}
