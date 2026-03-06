@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { encrypt } from '@/lib/encrypt';
+import { registerWebhooks } from '@/services/shopify/webhooks';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -73,6 +74,9 @@ export async function POST(req: Request) {
       webhooksRegistered: false,
     },
   });
+
+  // Register webhooks asynchronously — failure must not block onboarding
+  void registerWebhooks(store.id);
 
   return NextResponse.json({
     store: { id: store.id, shopifyDomain: store.shopifyDomain, syncStatus: store.syncStatus },
