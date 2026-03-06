@@ -1,0 +1,8 @@
+schema: 1
+story: '1.4'
+gate: PASS
+status_reason: 'App Shell completo: sidebar com 4 itens, highlight ativo via usePathname, SessionProvider correto, guard duplo de auth (layout + redirect), páginas placeholder funcionais. 10/10 testes passando.'
+reviewer: 'Quinn'
+updated: '2026-03-06T11:00:00Z'
+top_issues: []
+waiver: { active: false }

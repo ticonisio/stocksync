@@ -1,0 +1,8 @@
+schema: 1
+story: '1.1'
+gate: PASS
+status_reason: 'Infraestrutura completa: Next.js 14+, Prisma 5, CI/CD, health endpoint, .env.example com placeholders apenas. Deploy confirmado em stocksync-three.vercel.app.'
+reviewer: 'Quinn'
+updated: '2026-03-06T11:00:00Z'
+top_issues: []
+waiver: { active: false }

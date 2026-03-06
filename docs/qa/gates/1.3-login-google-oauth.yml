@@ -1,0 +1,8 @@
+schema: 1
+story: '1.3'
+gate: PASS
+status_reason: 'Google OAuth configurado corretamente: client credentials server-side apenas, PrismaAdapter gerencia criação/vinculação de contas, erros OAuth tratados com mensagem amigável. 10/10 testes passando.'
+reviewer: 'Quinn'
+updated: '2026-03-06T11:00:00Z'
+top_issues: []
+waiver: { active: false }

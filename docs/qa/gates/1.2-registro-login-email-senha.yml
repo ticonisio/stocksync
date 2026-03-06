@@ -1,0 +1,8 @@
+schema: 1
+story: '1.2'
+gate: PASS
+status_reason: 'Auth email/senha segura: bcrypt salt 12, erro genérico (previne user enumeration), passwordHash nunca exposto, JWT HTTP-only, dashboard protegido. 8/8 testes passando.'
+reviewer: 'Quinn'
+updated: '2026-03-06T11:00:00Z'
+top_issues: []
+waiver: { active: false }
