@@ -1,0 +1,26 @@
+schema: 1
+story: '2.1'
+gate: CONCERNS
+status_reason: >
+  Onboarding e conexão Shopify implementados corretamente. AES-256-GCM com IV aleatório, token nunca
+  exposto na resposta ou em logs, validação server-side via Shopify Admin API, redirect condicional
+  no dashboard layout. 7/7 ACs atendidos. Concern: timeouts intermitentes em testes que usam
+  vi.resetModules() + dynamic import (padrão ambiental já observado nas Stories 1.2 e 2.2).
+reviewer: 'Quinn'
+updated: '2026-03-06T12:00:00Z'
+top_issues:
+  - id: TST-001
+    severity: medium
+    title: Timeouts em testes com vi.resetModules() + dynamic import
+    description: >
+      5 testes em encrypt.test.ts e shopify-connect.test.ts apresentam timeout de 5s no primeiro
+      import dinâmico do módulo. Padrão ambiental recorrente (visto em 1.2, 2.2). Lógica de negócio
+      está correta — todos os cenários críticos (401, rede, token válido, normalização de domínio)
+      passam. Recomendação: aumentar testTimeout global para 15s no vitest.config.ts.
+    affected_tests:
+      - 'encrypt.test.ts > roundtrip'
+      - 'encrypt.test.ts > distinct ciphertexts'
+      - 'encrypt.test.ts > ciphertext format'
+      - 'shopify-connect.test.ts > retorna 401 quando não autenticado'
+      - 'shopify-connect.test.ts > retorna 400 para body inválido'
+waiver: { active: false }
