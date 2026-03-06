@@ -1,0 +1,16 @@
+schema: 1
+story: '2.2'
+gate: CONCERNS
+status_reason: 'Todos os 8 ACs implementados e testados (5 testes, 32/32 passando). Dois concerns de médio risco: Promise.all em collections pode acionar rate limit e sync síncrono pode deixar syncStatus preso em SYNCING em timeout do Vercel.'
+reviewer: 'Quinn'
+updated: '2026-03-06T10:30:00Z'
+top_issues:
+  - id: 'PERF-001'
+    severity: medium
+    finding: 'fetchAllCollections usa Promise.all para smart_collections e custom_collections simultaneamente. Duas requisições paralelas podem acionar rate limit (429) da Shopify mais facilmente que chamadas sequenciais.'
+    suggested_action: 'Converter para chamadas sequenciais ou adicionar delay entre elas. Prioridade: pós-MVP.'
+  - id: 'REL-001'
+    severity: medium
+    finding: 'syncStore é chamado de forma síncrona na API route (await syncStore). Se o Vercel encerrar o processo por timeout (10s no Hobby, 60s no Pro), o syncStatus permanece preso em SYNCING sem transição para ERROR. O usuário veria loading infinito.'
+    suggested_action: 'Adicionar verificação de tempo decorrido no status endpoint: se syncStatus = SYNCING por mais de X minutos, retornar como ERROR. Prioridade: pós-MVP.'
+waiver: { active: false }
