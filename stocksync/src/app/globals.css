@@ -8,6 +8,15 @@
   }
 }
 
+@keyframes inventory-flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: hsl(217 91% 60% / 0.15); }
+}
+
+.highlight-flash {
+  animation: inventory-flash 2s ease-in-out forwards;
+}
+
 
 
 @layer base {

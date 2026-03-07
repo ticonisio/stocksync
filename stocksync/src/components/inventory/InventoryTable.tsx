@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronRight, ChevronDown } from 'lucide-react';
@@ -14,36 +14,41 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-
-interface Variant {
-  id: string;
-  title: string;
-  sku: string | null;
-  availableStock: number;
-  reservedStock: number;
-  committedStock: number;
-}
-
-interface ProductWithRollup {
-  id: string;
-  title: string;
-  variants: Variant[];
-  availableRollup: number;
-  reservedRollup: number;
-  committedRollup: number;
-}
+import { useInventoryStore, type ProductWithRollup } from '@/store/inventoryStore';
+import { useInventoryRealtime } from '@/hooks/useInventoryRealtime';
 
 interface InventoryTableProps {
   products: ProductWithRollup[];
   total: number;
   page: number;
   perPage: number;
+  storeId: string;
 }
 
-export function InventoryTable({ products, total, page, perPage }: InventoryTableProps) {
+export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, perPage, storeId }: InventoryTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Zustand store
+  const setProducts = useInventoryStore((s) => s.setProducts);
+  const storeProducts = useInventoryStore((s) => s.products);
+  const storeTotal = useInventoryStore((s) => s.total);
+  const updatedVariantIds = useInventoryStore((s) => s.updatedVariantIds);
+  const [initialized, setInitialized] = useState(false);
+
+  // Sync SSR data into store on mount and page changes
+  useEffect(() => {
+    setProducts(ssrProducts, ssrTotal);
+    setInitialized(true);
+  }, [ssrProducts, ssrTotal, setProducts]);
+
+  // Subscribe to Supabase Realtime
+  useInventoryRealtime(storeId);
+
+  // Use store after init to capture realtime updates; fall back to SSR props
+  const products = initialized ? storeProducts : ssrProducts;
+  const total = initialized ? storeTotal : ssrTotal;
   const totalPages = Math.ceil(total / perPage);
 
   function toggleExpand(productId: string) {
@@ -136,7 +141,10 @@ export function InventoryTable({ products, total, page, perPage }: InventoryTabl
 
                   {isExpanded &&
                     product.variants.map((variant) => (
-                      <TableRow key={variant.id} className="bg-muted/30">
+                      <TableRow
+                        key={variant.id}
+                        className={`bg-muted/30 ${updatedVariantIds.has(variant.id) ? 'highlight-flash' : ''}`}
+                      >
                         <TableCell className="py-2" />
                         <TableCell className="py-2 pl-8">
                           <div className="text-sm">{variant.title}</div>

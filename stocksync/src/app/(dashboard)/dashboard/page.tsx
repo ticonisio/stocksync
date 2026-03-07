@@ -100,6 +100,7 @@ export default async function DashboardPage({
           total={total}
           page={page}
           perPage={ITEMS_PER_PAGE}
+          storeId={store.id}
         />
       </Suspense>
     </div>
