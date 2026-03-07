@@ -1,0 +1,28 @@
+schema: 1
+story: '3.1'
+gate: PASS
+status_reason: >
+  Dashboard principal implementado corretamente. API GET /api/inventory com paginação e rollup
+  (available+reserved+committed), InventoryTable com expansão por produto, badge Esgotado, Server
+  Component com Prisma direto para TTFB otimizado. 7/7 ACs atendidos, 38/38 testes passando.
+  Concerns iniciais (REACT-001, SEC-001) corrigidos antes do push — gate promovido a PASS.
+reviewer: 'Quinn'
+updated: '2026-03-06T15:00:00Z'
+top_issues:
+  - id: REACT-001
+    severity: medium
+    title: Shorthand Fragment sem key em .map() em InventoryTable
+    description: >
+      InventoryTable.tsx:101 usava <> (shorthand Fragment) como elemento raiz em produtos.map().
+      React requer que o elemento raiz de listas tenha key — <> não aceita props.
+    fix: "Substituído <> por <React.Fragment key={product.id}> e </> por </React.Fragment>"
+    status: FIXED
+  - id: SEC-001
+    severity: low
+    title: NaN não tratado em query params page/limit
+    description: >
+      parseInt('abc', 10) retorna NaN. Math.max(1, NaN) = NaN em JS.
+      Se ?page=abc for passado na URL, skip=NaN causaria erro no Prisma.
+    fix: "Adicionado || 1 / || 25 fallback: Math.max(1, parseInt(..., 10) || 1)"
+    status: FIXED
+waiver: { active: false }
