@@ -23,6 +23,9 @@ export function useInventoryRealtime(storeId: string) {
   }, [setProducts]);
 
   useEffect(() => {
+    // MNT-001: rastrear timeouts para cancelar no cleanup (evita chamada ao store após unmount)
+    const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
     const channel = supabase
       .channel(`inventory:${storeId}`)
       .on(
@@ -46,17 +49,26 @@ export function useInventoryRealtime(storeId: string) {
             committedStock: v.committedStock,
           });
           markUpdated(v.id);
-          setTimeout(() => clearUpdated(v.id), 2000);
+          const tid = setTimeout(() => {
+            pendingTimeouts.delete(tid);
+            clearUpdated(v.id);
+          }, 2000);
+          pendingTimeouts.add(tid);
         }
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-          toast.error('Conexão perdida. Reconectando...', { duration: 3000 });
+          // REQ-001: texto alinhado com AC5
+          toast.error('Reconectando...', { duration: 3000 });
+          // MNT-002: re-fetch sempre busca limit=25 (primeira página) — limitação conhecida,
+          // aceitável pois reconexão é evento raro e dados são re-sincronizados pelo Realtime
           setTimeout(() => void refetch(), 3000);
         }
       });
 
     return () => {
+      // MNT-001: cancelar todos os timeouts de highlight pendentes
+      pendingTimeouts.forEach(clearTimeout);
       void channel.unsubscribe();
     };
   }, [storeId, updateVariant, markUpdated, clearUpdated, refetch]);

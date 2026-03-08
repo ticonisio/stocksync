@@ -98,4 +98,22 @@ describe('useInventoryRealtime', () => {
     expect(mockChannelFn).toHaveBeenCalledWith('inventory:store-1');
     expect(mockChannelFn).toHaveBeenCalledWith('inventory:store-2');
   });
+
+  it('chama updateVariant e markUpdated ao receber evento UPDATE', () => {
+    renderHook(() => useInventoryRealtime('store-1'));
+
+    // Captura o callback passado ao .on('postgres_changes', config, callback)
+    const updateCallback = mockOnFn.mock.calls[0][2] as (payload: unknown) => void;
+
+    updateCallback({
+      new: { id: 'var-1', availableStock: 20, reservedStock: 5, committedStock: 3 },
+    });
+
+    expect(mockUpdateVariant).toHaveBeenCalledWith('var-1', {
+      availableStock: 20,
+      reservedStock: 5,
+      committedStock: 3,
+    });
+    expect(mockMarkUpdated).toHaveBeenCalledWith('var-1');
+  });
 });
