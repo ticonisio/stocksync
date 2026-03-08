@@ -1,0 +1,24 @@
+schema: 1
+story: '3.2'
+gate: CONCERNS
+status_reason: 'ACs core implementados e testes da story passam; há gap de cobertura no callback de UPDATE do Realtime e desvios menores de texto e cleanup.'
+reviewer: 'Quinn'
+updated: '2026-03-08T19:30:00Z'
+top_issues:
+  - id: 'TEST-001'
+    severity: medium
+    finding: 'Testes do useInventoryRealtime não simulam evento UPDATE — updateVariant/markUpdated/clearUpdated não são verificados como chamados após payload Realtime'
+    suggested_action: 'Adicionar teste que captura o callback de postgres_changes e verifica chamadas ao store com payload mockado'
+  - id: 'REQ-001'
+    severity: low
+    finding: 'AC5 especifica toast "Reconectando..." mas implementação usa "Conexão perdida. Reconectando..."'
+    suggested_action: 'Alinhar texto do toast com o AC ou atualizar o AC para refletir o texto mais descritivo'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'setTimeout(() => clearUpdated(v.id), 2000) sem cleanup no unmount do componente'
+    suggested_action: 'Rastrear o timeoutId e cancelar no cleanup do useEffect (retornar clearTimeout na função de cleanup)'
+  - id: 'MNT-002'
+    severity: low
+    finding: 'refetch() hardcoded com limit=25 ignora paginação atual do usuário'
+    suggested_action: 'Passar parâmetros de paginação atuais ao refetch ou documentar como limitação conhecida'
+waiver: { active: false }
