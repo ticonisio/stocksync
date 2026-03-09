@@ -1,0 +1,16 @@
+schema: 1
+story: '3.4'
+gate: PASS
+status_reason: 'Todos os 7 ACs implementados e testados (71/71 testes). Cross-store protection validada, velocity/urgency corretos. Dois findings de manutenibilidade não bloqueantes registrados no backlog.'
+reviewer: 'Quinn'
+updated: '2026-03-09T11:00:00Z'
+top_issues:
+  - id: 'MNT-001'
+    severity: medium
+    finding: 'API inventory/route.ts busca SalesVelocity para sort=velocity|urgency sem exigir collectionId; dashboard/page.tsx condiciona ao collectionId. Divergência não gera bug (UI gatea), mas cria query extra em chamadas diretas à API.'
+    suggested_action: 'Alinhar a condição no route.ts: só buscar SalesVelocity quando collectionId presente (ou documentar explicitamente o comportamento global como feature).'
+  - id: 'MNT-002'
+    severity: low
+    finding: 'CollectionsSidebar.tsx não trata estado de erro do SWR. Falha silenciosa na API exibe sidebar vazia sem feedback ao usuário.'
+    suggested_action: 'Adicionar tratamento de erro: mostrar mensagem ou ícone de retry quando useSWR retornar error.'
+waiver: { active: false }
