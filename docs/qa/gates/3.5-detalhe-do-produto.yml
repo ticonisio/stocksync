@@ -1,0 +1,20 @@
+schema: 1
+story: '3.5'
+gate: PASS
+status_reason: 'Todos os 7 ACs implementados e testados (83/83 testes). Cross-store protection validada em GET e PATCH. Zod validation correta. Três findings LOW documentados — nenhum bloqueante.'
+reviewer: 'Quinn'
+updated: '2026-03-09T12:00:00Z'
+top_issues:
+  - id: 'SEC-001'
+    severity: low
+    finding: 'GET /api/inventory/[productId]: period query param não validado explicitamente contra [7d, 30d, 90d]. Cast `as Period` permite valores inválidos que resultam em salesVelocities[] vazio — degradação graciosa, não exploitável.'
+    suggested_action: 'Adicionar validação: const validPeriods = ["7d","30d","90d"]; if (!validPeriods.includes(period)) period = "30d";'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'VariantVelocityTable não trata estado de erro do SWR. Falha silenciosa na API exibe dados SSR sem feedback ao usuário. Padrão recorrente (idem MNT-002 de Story 3.4).'
+    suggested_action: 'Adicionar: const { data, isLoading, error } = useSWR(...); if (error) exibir mensagem de erro ou botão de retry.'
+  - id: 'MNT-002'
+    severity: low
+    finding: 'UX gap: botão "Salvar" por linha de variante chama o mesmo endpoint de produto. leadTimeOverride é por produto (schema), não por variante. Salvar na variante M sobrescreve o valor da variante P. UI insinua granularidade que não existe no schema.'
+    suggested_action: 'Considerar UX: exibir um único campo de lead time override no header do produto, ou adicionar tooltip explicando que o override é por produto.'
+waiver: { active: false }
