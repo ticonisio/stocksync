@@ -117,4 +117,76 @@ describe('GET /api/inventory', () => {
     const json = await res.json();
     expect(json.page).toBe(1);
   });
+
+  // ── Novos testes: filtros (Story 3.3) ──────────────────────────────────
+
+  it('filtra por status=out_of_stock retornando só produtos esgotados', async () => {
+    mockGetServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
+    mockFindFirst.mockResolvedValueOnce(fakeStore);
+    mockTransaction.mockResolvedValueOnce([fakeProducts, 2]);
+
+    const res = await GET(makeRequest('http://localhost/api/inventory?status=out_of_stock'));
+    const json = await res.json();
+    expect(json.products).toHaveLength(1);
+    expect(json.products[0].id).toBe('prod-2');
+    expect(json.products[0].availableRollup).toBe(0);
+  });
+
+  it('filtra por status=available retornando só produtos com estoque', async () => {
+    mockGetServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
+    mockFindFirst.mockResolvedValueOnce(fakeStore);
+    mockTransaction.mockResolvedValueOnce([fakeProducts, 2]);
+
+    const res = await GET(makeRequest('http://localhost/api/inventory?status=available'));
+    const json = await res.json();
+    expect(json.products).toHaveLength(1);
+    expect(json.products[0].id).toBe('prod-1');
+  });
+
+  it('ordena por available desc corretamente', async () => {
+    mockGetServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
+    mockFindFirst.mockResolvedValueOnce(fakeStore);
+    mockTransaction.mockResolvedValueOnce([fakeProducts, 2]);
+
+    const res = await GET(makeRequest('http://localhost/api/inventory?sort=available&order=desc'));
+    const json = await res.json();
+    // prod-1: availableRollup=15, prod-2: 0 → desc: prod-1 first
+    expect(json.products[0].id).toBe('prod-1');
+    expect(json.products[1].id).toBe('prod-2');
+  });
+
+  it('ordena por available asc corretamente', async () => {
+    mockGetServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
+    mockFindFirst.mockResolvedValueOnce(fakeStore);
+    mockTransaction.mockResolvedValueOnce([fakeProducts, 2]);
+
+    const res = await GET(makeRequest('http://localhost/api/inventory?sort=available&order=asc'));
+    const json = await res.json();
+    // asc: prod-2 (0) first, prod-1 (15) second
+    expect(json.products[0].id).toBe('prod-2');
+    expect(json.products[1].id).toBe('prod-1');
+  });
+
+  it('passa where clause com search para o prisma (findMany recebe OR filter)', async () => {
+    mockGetServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
+    mockFindFirst.mockResolvedValueOnce(fakeStore);
+    mockTransaction.mockResolvedValueOnce([[fakeProducts[0]], 1]);
+
+    const res = await GET(makeRequest('http://localhost/api/inventory?search=Produto+A'));
+    expect(res.status).toBe(200);
+
+    // findMany é chamado antes de $transaction — verificar where clause diretamente
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          storeId: 'store-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              title: expect.objectContaining({ contains: 'Produto A' }),
+            }),
+          ]),
+        }),
+      })
+    );
+  });
 });
