@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LeadTimeGroupsManager } from '@/components/settings/LeadTimeGroupsManager';
 
 export default function SettingsPage() {
   return (
@@ -20,6 +21,8 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <LeadTimeGroupsManager />
     </div>
   );
 }
