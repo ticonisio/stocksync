@@ -66,6 +66,12 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
     router.push('/dashboard?' + params.toString());
   }
 
+  function navigateToProduct(productId: string) {
+    const currentParams = searchParams.toString();
+    const from = encodeURIComponent('/dashboard' + (currentParams ? '?' + currentParams : ''));
+    router.push(`/products/${productId}?from=${from}`);
+  }
+
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -106,9 +112,12 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                 <React.Fragment key={product.id}>
                   <TableRow
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => toggleExpand(product.id)}
+                    onClick={() => navigateToProduct(product.id)}
                   >
-                    <TableCell className="py-3">
+                    <TableCell
+                      className="py-3"
+                      onClick={(e) => { e.stopPropagation(); toggleExpand(product.id); }}
+                    >
                       {isExpanded ? (
                         <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       ) : (
