@@ -1,0 +1,16 @@
+schema: 1
+story: '4.1'
+gate: PASS
+status_reason: 'Todos os 7 ACs implementados e testados (97/97 testes, +14 novos). Cross-store protection validada em duas camadas (variant.findMany com storeId + order.storeId no aggregate). Isolamento correto de falha de velocity no webhook (try/catch). Dois findings LOW documentados — nenhum bloqueante.'
+reviewer: 'Quinn'
+updated: '2026-03-09T13:00:00Z'
+top_issues:
+  - id: 'PERF-001'
+    severity: low
+    finding: 'calculateAndSaveVelocity(store.id) sem variantIds executa N×3 aggregate queries + N×3 upserts sequencialmente. Para catálogos grandes (>500 variantes), o endpoint POST /api/velocity/recalculate pode ser lento. Degradação graciosa — não falha.'
+    suggested_action: 'Futuramente: processar em chunks de 50-100 variantes ou mover para background job (Bull/BullMQ). Não bloqueante para MVP.'
+  - id: 'MNT-001'
+    severity: low
+    finding: 'POST /api/velocity/recalculate sem rate limiting por usuário. Usuário autenticado pode disparar recálculo completo da store repetidamente, consumindo DB queries desnecessariamente.'
+    suggested_action: 'Adicionar rate limit (ex: 1 recálculo manual por minuto por userId via middleware ou cache Redis). Não bloqueante para MVP.'
+waiver: { active: false }

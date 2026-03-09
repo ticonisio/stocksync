@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity';
 
 // ── HMAC verification ───────────────────────────────────────────────────────
 
@@ -136,6 +137,21 @@ export async function POST(req: Request): Promise<Response> {
   // Process by topic
   if (topic === 'orders/paid') {
     await processOrderPaid(store.id, payload);
+
+    // Recalcular velocity das variantes afetadas — falha isolada, não afeta resposta do webhook
+    try {
+      const shopifyVariantIds = payload.line_items.map((i) => String(i.variant_id));
+      const affectedVariants = await prisma.variant.findMany({
+        where: { storeId: store.id, shopifyVariantId: { in: shopifyVariantIds } },
+        select: { id: true },
+      });
+      const internalIds = affectedVariants.map((v) => v.id);
+      if (internalIds.length > 0) {
+        await calculateAndSaveVelocity(store.id, internalIds);
+      }
+    } catch (err) {
+      console.error('[webhook] velocity recalculation failed:', err);
+    }
   } else if (topic === 'orders/cancelled') {
     await processOrderCancelled(store.id, payload, 'CANCELLED');
   } else if (topic === 'orders/refunded') {

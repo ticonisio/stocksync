@@ -12,7 +12,9 @@ const mockOrderUpdate = vi.fn();
 const mockOrderItemFindFirst = vi.fn();
 const mockOrderItemCreate = vi.fn();
 const mockVariantFindUnique = vi.fn();
+const mockVariantFindMany = vi.fn();
 const mockVariantUpdate = vi.fn();
+const mockCalculateAndSaveVelocity = vi.fn();
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -32,9 +34,14 @@ vi.mock('@/lib/prisma', () => ({
     },
     variant: {
       findUnique: mockVariantFindUnique,
+      findMany: mockVariantFindMany,
       update: mockVariantUpdate,
     },
   },
+}));
+
+vi.mock('@/services/velocity/calculateVelocity', () => ({
+  calculateAndSaveVelocity: mockCalculateAndSaveVelocity,
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -87,7 +94,9 @@ describe('POST /api/shopify/webhooks', () => {
     mockOrderUpsert.mockResolvedValue({ id: 'order-1' });
     mockOrderItemFindFirst.mockResolvedValue(null);
     mockOrderItemCreate.mockResolvedValue({});
+    mockVariantFindMany.mockResolvedValue([]);
     mockVariantUpdate.mockResolvedValue({});
+    mockCalculateAndSaveVelocity.mockResolvedValue(undefined);
   });
 
   it('returns 401 for invalid HMAC', async () => {
