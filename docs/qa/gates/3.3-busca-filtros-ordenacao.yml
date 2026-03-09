@@ -1,0 +1,24 @@
+schema: 1
+story: '3.3'
+gate: CONCERNS
+status_reason: 'Todos os ACs implementados, 29 testes passando; ordenação por rollup pós-query limita corretude com paginação e o total exibido no contador não reflete filtro de status ativo.'
+reviewer: 'Quinn'
+updated: '2026-03-09T12:00:00Z'
+top_issues:
+  - id: 'PERF-001'
+    severity: medium
+    finding: 'Ordenação por available/reserved aplicada pós-query no JavaScript — só ordena produtos da página atual. Com paginação, o produto com maior rollup pode estar em outra página e nunca aparecer no topo.'
+    suggested_action: 'Documentar explicitamente como limitação conhecida no AC ou migrar ordenação de rollup para subquery Prisma no futuro'
+  - id: 'REQ-001'
+    severity: medium
+    finding: 'Contador "Exibindo X de Y" usa total pré-filtro de status (rollup). Ao filtrar por "Esgotado", Y exibe total de produtos sem status filter, tornando a contagem enganosa para o usuário.'
+    suggested_action: 'Retornar totalFiltered separado da API para status filter, ou documentar como limitação e ajustar copy para "Exibindo X de Y resultados (sem filtro de status)"'
+  - id: 'MNT-001'
+    severity: low
+    finding: "useDebounce.ts tem diretiva 'use client' desnecessária — é um hook React puro (useState/useEffect) sem dependências de browser/client-only APIs"
+    suggested_action: "Remover diretiva 'use client' de useDebounce.ts para manter hook genérico e reutilizável em outros contextos"
+  - id: 'MNT-002'
+    severity: low
+    finding: "useEffect em InventoryFilters.tsx desabilita react-hooks/exhaustive-deps para omitir updateFilters das deps — pode causar stale closure em refatorações futuras"
+    suggested_action: 'Usar useCallback em useInventoryFilterActions para estabilizar referência de updateFilters, eliminando necessidade do eslint-disable'
+waiver: { active: false }

@@ -32,8 +32,7 @@ export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps
     if (debouncedSearch !== filters.search) {
       updateFilters({ search: debouncedSearch });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
+  }, [debouncedSearch, filters.search, updateFilters]);
 
   // Sync URL search → local input on external navigation (back/forward)
   useEffect(() => {
@@ -138,9 +137,19 @@ export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps
       </div>
 
       {/* Result count — AC7 */}
-      <p className="text-sm text-muted-foreground">
-        Exibindo {filteredCount} de {total} produtos
-      </p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="text-sm text-muted-foreground">
+          Exibindo {filteredCount} de {total} produtos
+          {filters.status !== 'all' && (
+            <span className="ml-1 text-xs">(total sem filtro de status)</span>
+          )}
+        </p>
+        {(filters.sort === 'available' || filters.sort === 'reserved') && (
+          <p className="text-xs text-muted-foreground">
+            * Ordenação se aplica à página atual
+          </p>
+        )}
+      </div>
     </div>
   );
 }
