@@ -1,0 +1,101 @@
+qa_gate:
+  story_id: "4.2"
+  story_title: "Aba Insights — Produtos em Alta & Vale Repor"
+  reviewed_by: "Quinn (@qa)"
+  review_date: "2026-03-09"
+  decision: PASS
+
+  ac_traceability:
+    - ac: "AC1 — Aba Insights acessível via navegação lateral"
+      status: PASS
+      evidence: "page.tsx em src/app/(dashboard)/insights/page.tsx; sidebar não modificado (link já existia)"
+
+    - ac: "AC2 — Seção Produtos em Alta: top 10 ordenados por velocity DESC (rollup por produto)"
+      status: PASS
+      evidence: |
+        aggregateVelocityByProduct() soma velocityPerDay + availableStock por productId.
+        page.tsx: rollups.sort((a,b) => b.velocityPerDay - a.velocityPerDay).slice(0,10).map((p,i) => ({rank:i+1,...p})).
+        API trending: mesma lógica com limit configurável (1-50, default 10).
+
+    - ac: "AC3 — Card em Alta exibe rank, nome, velocity, estoque, variante mais vendida"
+      status: PASS
+      evidence: |
+        InsightCard variant='trending': rank badge, title, formatVelocity(velocityPerDay), totalAvailableStock, topVariantTitle.
+        topVariantTitle = variante com maior velocityPerDay individual (rastreado em aggregateVelocityByProduct via topVelocity interno).
+
+    - ac: "AC4 — Vale Repor: velocity > 0 AND estoque < velocity × 14"
+      status: PASS
+      evidence: |
+        page.tsx: rollups.filter(p => p.velocityPerDay > 0 && p.totalAvailableStock < p.velocityPerDay * 14).
+        reorder/route.ts: mesma expressão de filtro.
+        Teste: insights-reorder-route.test.ts — 'filters correctly: velocity > 0 AND stock < velocity * 14'.
+
+    - ac: "AC5 — Card Vale Repor exibe nome, estoque, diasRestantes, velocity"
+      status: PASS
+      evidence: |
+        InsightCard variant='reorder': title, totalAvailableStock, diasRestantes com cor urgência, formatVelocity(velocityPerDay).
+        diasRestantes = Math.max(0, Math.floor(totalAvailableStock / velocityPerDay)).
+        Urgência: ≤3 → text-destructive, ≤7 → text-warning, else text-foreground.
+
+    - ac: "AC6 — PeriodSelector 7d/30d/90d, default 30d, estado em URL"
+      status: PASS
+      evidence: |
+        PeriodSelector.tsx: router.push('/insights?period=<p>') ao clicar.
+        parsePeriod() com allowlist ['7d','30d','90d'] e default '30d' em page.tsx e ambas as rotas.
+        page.tsx lê searchParams.period diretamente (Server Component).
+
+    - ac: "AC7 — Estado vazio amigável quando sem dados"
+      status: PASS
+      evidence: |
+        hasData = rollups.length > 0.
+        Quando false: TrendingUp icon + texto exato 'Dados insuficientes — a velocity será calculada após os primeiros pedidos processados.'
+
+  security_checks:
+    cross_store_isolation:
+      status: PASS
+      detail: "Todas as queries: prisma.salesVelocity.findMany({ where: { storeId: store.id, period } }). storeId derivado de session.user.id → store.findFirst({ where: { userId: session.user.id } })."
+    auth_gate:
+      status: PASS
+      detail: "Ambas as rotas: getServerSession(authOptions) → 401 se !session?.user?.id"
+    store_gate:
+      status: PASS
+      detail: "Ambas as rotas: 404 se store não encontrada"
+    input_validation:
+      status: PASS
+      detail: "period: allowlist; limit: isNaN + min(1) + max(50); sem SQL injection (Prisma ORM)"
+
+  test_coverage:
+    unit_tests_added: 8
+    total_suite: "105/105 PASS"
+    files:
+      - "tests/unit/insights-trending-route.test.ts (4 testes)"
+      - "tests/unit/insights-reorder-route.test.ts (4 testes)"
+    coverage_notes: "Todos os caminhos críticos cobertos: 401, 404, lógica de filtro, cálculo diasRestantes, ordenação"
+
+  build_checks:
+    lint: PASS
+    typecheck: PASS
+    test: PASS
+    build: "PASS (25 rotas)"
+
+  observations:
+    - severity: INFO
+      description: |
+        parsePeriod() duplicado em 3 arquivos (trending/route, reorder/route, page.tsx).
+        Aceitável para MVP; extração futura para lib/period.ts pode ser feita em outra story se necessário.
+    - severity: INFO
+      description: |
+        InsightCard.tsx marcado como 'use client' porém não usa hooks de cliente.
+        Poderia ser Server Component, mas não causa defeito funcional e foi especificado como Client Component na story.
+    - severity: INFO
+      description: |
+        Task 5.4 descrevia Suspense "interno" ao PeriodSelector (que usa useSearchParams).
+        Implementação usa useRouter (mais simples) e Suspense é aplicado externamente em page.tsx — padrão correto e defensivo.
+
+  verdict_summary: |
+    Todos os 7 ACs implementados e verificáveis no código.
+    Segurança: cross-store + auth + store isolation confirmados em todas as rotas.
+    Fórmulas: rollup (SUM velocity + stock), filtro 14× threshold, diasRestantes Math.floor, rank 1-based — todas corretas.
+    Testes: 8 novos casos cobrem os caminhos críticos.
+    Observações são apenas INFO — sem bloqueadores.
+    Story 4.2 aprovada para merge.
