@@ -18,9 +18,11 @@ import type { SortField } from '@/app/api/inventory/route';
 interface InventoryFiltersProps {
   total: number;
   filteredCount: number;
+  /** When true, shows velocity/urgency sort buttons (collection view) */
+  showCollectionSorts?: boolean;
 }
 
-export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps) {
+export function InventoryFilters({ total, filteredCount, showCollectionSorts = false }: InventoryFiltersProps) {
   const filters = useInventoryFilters();
   const { updateFilters, clearFilters } = useInventoryFilterActions();
 
@@ -59,6 +61,8 @@ export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps
   const hasActiveFilters =
     filters.search || filters.status !== 'all' || filters.sort !== 'name' || filters.order !== 'asc';
 
+  const isComputedSort = ['available', 'reserved', 'velocity', 'urgency'].includes(filters.sort);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 items-center">
@@ -92,7 +96,7 @@ export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps
         </Select>
 
         {/* Sort buttons */}
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <Button
             variant={filters.sort === 'name' ? 'default' : 'outline'}
             size="sm"
@@ -117,6 +121,28 @@ export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps
           >
             Reservado {getSortIcon('reserved')}
           </Button>
+
+          {/* Collection-specific sorts — AC4 */}
+          {showCollectionSorts && (
+            <>
+              <Button
+                variant={filters.sort === 'velocity' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSortToggle('velocity')}
+                className="gap-1"
+              >
+                Mais vendidos {getSortIcon('velocity')}
+              </Button>
+              <Button
+                variant={filters.sort === 'urgency' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSortToggle('urgency')}
+                className="gap-1"
+              >
+                Urgência {getSortIcon('urgency')}
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Clear filters */}
@@ -144,7 +170,7 @@ export function InventoryFilters({ total, filteredCount }: InventoryFiltersProps
             <span className="ml-1 text-xs">(total sem filtro de status)</span>
           )}
         </p>
-        {(filters.sort === 'available' || filters.sort === 'reserved') && (
+        {isComputedSort && (
           <p className="text-xs text-muted-foreground">
             * Ordenação se aplica à página atual
           </p>

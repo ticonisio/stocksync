@@ -16,6 +16,7 @@ type SearchParams = {
   status?: string;
   sort?: string;
   order?: string;
+  collectionId?: string;
 };
 
 export default async function DashboardPage({
@@ -35,10 +36,31 @@ export default async function DashboardPage({
   const search = searchParams.search?.trim() ?? '';
   const sort = searchParams.sort ?? 'name';
   const order = (searchParams.order ?? 'asc') as 'asc' | 'desc';
+  const collectionId = searchParams.collectionId ?? '';
+
+  // Validate collectionId if provided (cross-store protection)
+  let activeCollection: { id: string; title: string } | null = null;
+  if (collectionId && collectionId !== 'uncategorized') {
+    activeCollection = await prisma.collection.findFirst({
+      where: { id: collectionId, storeId: store.id },
+      select: { id: true, title: true },
+    });
+    // If invalid collectionId, treat as no filter (graceful degradation)
+    if (!activeCollection) redirect('/dashboard');
+  }
+
+  // Collection filter
+  const collectionFilter: Prisma.ProductWhereInput =
+    collectionId === 'uncategorized'
+      ? { collections: { none: {} } }
+      : collectionId
+        ? { collections: { some: { collectionId } } }
+        : {};
 
   // Build where clause — search applied server-side
   const where: Prisma.ProductWhereInput = {
     storeId: store.id,
+    ...collectionFilter,
     ...(search
       ? {
           OR: [
@@ -70,6 +92,24 @@ export default async function DashboardPage({
     committedRollup: p.variants.reduce((s, v) => s + v.committedStock, 0),
   }));
 
+  // Velocity/urgency: only fetch when inside a collection view
+  let velMap = new Map<string, number>();
+  if (collectionId && (sort === 'velocity' || sort === 'urgency')) {
+    const velocities = await prisma.salesVelocity.findMany({
+      where: { storeId: store.id, period: '30d' },
+      select: { variantId: true, velocityPerDay: true },
+    });
+    velMap = new Map(velocities.map((v) => [v.variantId, v.velocityPerDay]));
+  }
+
+  const getVelocity = (p: (typeof productsWithRollup)[0]) =>
+    p.variants.reduce((sum, v) => sum + (velMap.get(v.id) ?? 0), 0);
+
+  const getUrgencyDays = (p: (typeof productsWithRollup)[0]) => {
+    const vel = getVelocity(p);
+    return vel === 0 ? Infinity : p.availableRollup / vel;
+  };
+
   // Post-query sort for computed fields (within current page)
   const sortedProducts =
     sort === 'available'
@@ -84,7 +124,13 @@ export default async function DashboardPage({
               ? a.reservedRollup - b.reservedRollup
               : b.reservedRollup - a.reservedRollup
           )
-        : productsWithRollup;
+        : sort === 'velocity'
+          ? [...productsWithRollup].sort((a, b) =>
+              order === 'asc' ? getVelocity(a) - getVelocity(b) : getVelocity(b) - getVelocity(a)
+            )
+          : sort === 'urgency'
+            ? [...productsWithRollup].sort((a, b) => getUrgencyDays(a) - getUrgencyDays(b))
+            : productsWithRollup;
 
   // Post-query status filter
   const status = searchParams.status ?? 'all';
@@ -104,9 +150,28 @@ export default async function DashboardPage({
     _count: { id: true },
   });
 
+  // Collection header label
+  const collectionLabel =
+    collectionId === 'uncategorized'
+      ? 'Sem coleção'
+      : activeCollection?.title ?? null;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+      {/* Page header */}
+      {collectionLabel ? (
+        <div>
+          <p className="text-sm text-muted-foreground mb-1">Dashboard</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {collectionLabel}
+            <span className="ml-2 text-base font-normal text-muted-foreground">
+              {total} produto{total !== 1 ? 's' : ''}
+            </span>
+          </h1>
+        </div>
+      ) : (
+        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -152,7 +217,11 @@ export default async function DashboardPage({
 
       {/* Filters — wrapped in Suspense (required for useSearchParams in Next.js 14) */}
       <Suspense fallback={<div className="h-16 bg-muted animate-pulse rounded-md" />}>
-        <InventoryFilters total={total} filteredCount={filteredProducts.length} />
+        <InventoryFilters
+          total={total}
+          filteredCount={filteredProducts.length}
+          showCollectionSorts={!!collectionId}
+        />
       </Suspense>
 
       {/* Inventory table */}

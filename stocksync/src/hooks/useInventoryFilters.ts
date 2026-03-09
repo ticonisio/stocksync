@@ -57,8 +57,13 @@ export function useInventoryFilterActions() {
   );
 
   const clearFilters = useCallback(() => {
-    router.push('/dashboard');
-  }, [router]);
+    // Preserve collectionId when clearing other filters
+    const collectionId = searchParams.get('collectionId');
+    const params = new URLSearchParams();
+    if (collectionId) params.set('collectionId', collectionId);
+    const query = params.toString();
+    router.push('/dashboard' + (query ? '?' + query : ''));
+  }, [router, searchParams]);
 
   return { updateFilters, clearFilters };
 }

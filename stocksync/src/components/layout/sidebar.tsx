@@ -1,10 +1,12 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { LayoutGrid, TrendingUp, Clock, Settings, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CollectionsSidebar } from '@/components/inventory/CollectionsSidebar';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
@@ -26,7 +28,7 @@ export function Sidebar() {
         <span className="text-xl font-bold text-foreground tracking-tight">StockSync</span>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1">
+      <nav className="p-2 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -48,6 +50,21 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Collections sidebar — separated by divider, scrollable */}
+      <div className="flex-1 border-t border-border overflow-hidden flex flex-col min-h-0">
+        <Suspense
+          fallback={
+            <div className="px-2 pt-2 space-y-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-7 bg-muted animate-pulse rounded-md" />
+              ))}
+            </div>
+          }
+        >
+          <CollectionsSidebar />
+        </Suspense>
+      </div>
 
       <div className="p-3 border-t border-border space-y-2">
         <div className="flex items-center gap-2 px-2 py-1">

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 
 export type FilterStatus = 'all' | 'available' | 'reserved' | 'out_of_stock';
-export type SortField = 'name' | 'available' | 'reserved';
+export type SortField = 'name' | 'available' | 'reserved' | 'velocity' | 'urgency';
 export type SortOrder = 'asc' | 'desc';
 
 export async function GET(req: Request) {
@@ -28,10 +28,30 @@ export async function GET(req: Request) {
   const status = (searchParams.get('status') ?? 'all') as FilterStatus;
   const sort = (searchParams.get('sort') ?? 'name') as SortField;
   const order = (searchParams.get('order') ?? 'asc') as SortOrder;
+  const collectionId = searchParams.get('collectionId') ?? '';
 
-  // Build Prisma where clause — search applied server-side for performance
+  // Validate collectionId belongs to this store (cross-store protection)
+  if (collectionId && collectionId !== 'uncategorized') {
+    const col = await prisma.collection.findFirst({
+      where: { id: collectionId, storeId: store.id },
+    });
+    if (!col) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
+
+  // Collection filter — ProductCollection junction: use { collectionId } not { id }
+  const collectionFilter: Prisma.ProductWhereInput =
+    collectionId === 'uncategorized'
+      ? { collections: { none: {} } }
+      : collectionId
+        ? { collections: { some: { collectionId } } }
+        : {};
+
+  // Build Prisma where clause
   const where: Prisma.ProductWhereInput = {
     storeId: store.id,
+    ...collectionFilter,
     ...(search
       ? {
           OR: [
@@ -64,7 +84,26 @@ export async function GET(req: Request) {
     committedRollup: p.variants.reduce((s, v) => s + v.committedStock, 0),
   }));
 
-  // Post-query sort for computed rollup fields (operates within current page)
+  // Velocity/urgency sort: fetch SalesVelocity if needed
+  let velMap = new Map<string, number>();
+  if (sort === 'velocity' || sort === 'urgency') {
+    const velocities = await prisma.salesVelocity.findMany({
+      where: { storeId: store.id, period: '30d' },
+      select: { variantId: true, velocityPerDay: true },
+    });
+    velMap = new Map(velocities.map((v) => [v.variantId, v.velocityPerDay]));
+  }
+
+  const getVelocity = (p: (typeof productsWithRollup)[0]) =>
+    p.variants.reduce((sum, v) => sum + (velMap.get(v.id) ?? 0), 0);
+
+  const getUrgencyDays = (p: (typeof productsWithRollup)[0]) => {
+    const vel = getVelocity(p);
+    if (vel === 0) return Infinity; // no demand — not urgent
+    return p.availableRollup / vel;
+  };
+
+  // Post-query sort for computed fields (operates within current page)
   const sortedProducts =
     sort === 'available'
       ? [...productsWithRollup].sort((a, b) =>
@@ -78,10 +117,16 @@ export async function GET(req: Request) {
               ? a.reservedRollup - b.reservedRollup
               : b.reservedRollup - a.reservedRollup
           )
-        : productsWithRollup;
+        : sort === 'velocity'
+          ? [...productsWithRollup].sort((a, b) =>
+              order === 'asc' ? getVelocity(a) - getVelocity(b) : getVelocity(b) - getVelocity(a)
+            )
+          : sort === 'urgency'
+            ? [...productsWithRollup].sort((a, b) => getUrgencyDays(a) - getUrgencyDays(b))
+            : productsWithRollup;
 
-  // Post-query status filter — operates on current page's rollup values
-  // Note: total reflects pre-status-filter count (accepted limitation, see architecture decisions)
+  // Post-query status filter
+  // Note: total reflects pre-status-filter count (accepted limitation)
   const filteredProducts =
     status === 'available'
       ? sortedProducts.filter((p) => p.availableRollup > 0)
