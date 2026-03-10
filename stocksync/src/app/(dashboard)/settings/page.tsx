@@ -17,7 +17,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <Button asChild variant="outline">
-            <Link href="/onboarding/connect-shopify">Reconectar loja</Link>
+            <Link href="/connect-shopify">Reconectar loja</Link>
           </Button>
         </CardContent>
       </Card>

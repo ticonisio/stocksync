@@ -28,7 +28,7 @@ export default async function DashboardPage({
   if (!session) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/onboarding/connect-shopify');
+  if (!store) redirect('/connect-shopify');
 
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10));
   const skip = (page - 1) * ITEMS_PER_PAGE;

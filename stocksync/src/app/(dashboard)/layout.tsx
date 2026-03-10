@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/onboarding/connect-shopify');
+  if (!store) redirect('/connect-shopify');
 
   return (
     <AuthSessionProvider>

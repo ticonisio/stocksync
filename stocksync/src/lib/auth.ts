@@ -47,6 +47,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
-    newUser: '/onboarding/connect-shopify',
+    newUser: '/connect-shopify',
   },
 };

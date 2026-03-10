@@ -17,7 +17,7 @@ export default async function LeadTimePage({ searchParams }: LeadTimePageProps) 
   if (!session?.user?.id) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/onboarding/connect-shopify');
+  if (!store) redirect('/connect-shopify');
 
   const period = parsePeriod(searchParams.period);
   const items = await getUrgencyItems(store.id, period);

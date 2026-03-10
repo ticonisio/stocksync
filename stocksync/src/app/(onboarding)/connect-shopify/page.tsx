@@ -33,7 +33,7 @@ export default function ConnectShopifyPage() {
         return;
       }
 
-      router.push('/onboarding/syncing');
+      router.push('/syncing');
     } catch {
       setError('Erro de rede. Verifique sua conexão e tente novamente.');
     } finally {
