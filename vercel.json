@@ -1,0 +1,6 @@
+{
+  "installCommand": "cd stocksync && npm install",
+  "buildCommand": "cd stocksync && npx prisma generate && npx next build",
+  "outputDirectory": "stocksync/.next",
+  "framework": "nextjs"
+}
