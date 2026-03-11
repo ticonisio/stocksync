@@ -124,9 +124,9 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                     </TableCell>
-                    <TableCell className="py-3 font-medium">
+                    <TableCell className="py-3">
                       <div className="flex items-center gap-2">
-                        <span>{product.title}</span>
+                        <span className="font-semibold text-white">{product.title}</span>
                         {isOutOfStock && (
                           <Badge variant="destructive" className="text-xs">
                             Esgotado

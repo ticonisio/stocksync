@@ -40,7 +40,7 @@ export function UrgencyCard({ item }: UrgencyCardProps) {
             <Badge variant={STATUS_VARIANT[item.status]} className="text-xs flex-shrink-0">
               {item.status}
             </Badge>
-            <p className="font-medium truncate">{item.title}</p>
+            <p className="font-semibold text-white truncate">{item.title}</p>
           </div>
           <p className="text-sm text-muted-foreground truncate">{item.topVariantTitle}</p>
         </div>
