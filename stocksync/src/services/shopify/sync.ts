@@ -6,6 +6,7 @@ const SHOPIFY_API_VERSION = '2024-01';
 const PAGE_SIZE = 250;
 const REQUEST_DELAY_MS = 500;
 const MAX_RETRIES = 3;
+const MAX_PAGES = 100; // Safety: max 25,000 products (100 * 250)
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,7 +48,7 @@ async function fetchProductsPage(
   const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
   const nextCursor = nextMatch?.[1];
 
-  return { products: data.products, nextCursor };
+  return { products: data.products ?? [], nextCursor };
 }
 
 async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): Promise<void> {
@@ -133,14 +134,17 @@ async function fetchCollectsPage(
   const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
   const nextCursor = nextMatch?.[1];
 
-  return { collects: data.collects, nextCursor };
+  return { collects: data.collects ?? [], nextCursor };
 }
 
 async function syncCollects(storeId: string, domain: string, token: string): Promise<void> {
   let cursor: string | undefined;
+  let page = 0;
 
   do {
     const { collects, nextCursor } = await fetchCollectsPage(domain, token, cursor);
+
+    if (collects.length === 0) break;
 
     for (const c of collects) {
       const product = await prisma.product.findUnique({
@@ -174,8 +178,9 @@ async function syncCollects(storeId: string, domain: string, token: string): Pro
     }
 
     cursor = nextCursor;
+    page++;
     if (cursor) await delay(REQUEST_DELAY_MS);
-  } while (cursor);
+  } while (cursor && page < MAX_PAGES);
 }
 
 export async function syncStore(storeId: string): Promise<void> {
@@ -191,15 +196,20 @@ export async function syncStore(storeId: string): Promise<void> {
 
     let cursor: string | undefined;
     let totalUpserted = 0;
+    let page = 0;
 
     do {
       const { products, nextCursor } = await fetchProductsPage(domain, accessToken, cursor);
+
+      if (products.length === 0) break;
+
       await upsertProductsPage(storeId, products);
       totalUpserted += products.length;
       await prisma.store.update({ where: { id: storeId }, data: { syncDone: totalUpserted } });
       cursor = nextCursor;
+      page++;
       if (cursor) await delay(REQUEST_DELAY_MS);
-    } while (cursor);
+    } while (cursor && page < MAX_PAGES);
 
     await syncCollections(storeId, domain, accessToken);
     await syncCollects(storeId, domain, accessToken);
@@ -209,7 +219,12 @@ export async function syncStore(storeId: string): Promise<void> {
       data: { syncStatus: 'COMPLETE', lastSyncedAt: new Date() },
     });
   } catch (err) {
-    await prisma.store.update({ where: { id: storeId }, data: { syncStatus: 'ERROR' } });
+    await prisma.store.update({
+      where: { id: storeId },
+      data: { syncStatus: 'ERROR' },
+    }).catch(() => {
+      // If even this fails (DB down), there's nothing more we can do
+    });
     throw err;
   }
 }

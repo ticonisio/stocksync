@@ -17,7 +17,11 @@ export async function POST() {
     return NextResponse.json({ error: 'No store connected' }, { status: 404 });
   }
 
-  await syncStore(store.id);
+  // Fire-and-forget: respond immediately, sync runs in background.
+  // Error handling is inside syncStore (sets syncStatus to ERROR on failure).
+  syncStore(store.id).catch(() => {
+    // syncStore already sets syncStatus: 'ERROR' in its own catch block
+  });
 
-  return NextResponse.json({ status: 'complete' });
+  return NextResponse.json({ status: 'started' });
 }

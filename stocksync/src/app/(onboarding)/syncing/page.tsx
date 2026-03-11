@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 type SyncStatus = 'PENDING' | 'SYNCING' | 'COMPLETE' | 'ERROR';
+
+const MAX_POLL_TIME_MS = 5 * 60 * 1000; // 5 minutes
+const STALE_THRESHOLD_MS = 30 * 1000; // 30s without progress = stale
 
 export default function SyncingPage() {
   const router = useRouter();
@@ -11,10 +14,15 @@ export default function SyncingPage() {
   const [syncDone, setSyncDone] = useState(0);
   const [syncTotal, setSyncTotal] = useState<number | null>(null);
   const [hasError, setHasError] = useState(false);
+  const startTimeRef = useRef(Date.now());
+  const lastProgressRef = useRef({ syncDone: 0, at: Date.now() });
 
   const startSync = useCallback(async () => {
     setHasError(false);
     setStatus('SYNCING');
+    setSyncDone(0);
+    startTimeRef.current = Date.now();
+    lastProgressRef.current = { syncDone: 0, at: Date.now() };
     try {
       await fetch('/api/shopify/sync', { method: 'POST' });
     } catch {
@@ -38,6 +46,14 @@ export default function SyncingPage() {
     }
 
     const interval = setInterval(async () => {
+      // Timeout: stop polling after MAX_POLL_TIME_MS
+      if (Date.now() - startTimeRef.current > MAX_POLL_TIME_MS) {
+        clearInterval(interval);
+        setHasError(true);
+        setStatus('ERROR');
+        return;
+      }
+
       try {
         const res = await fetch('/api/shopify/sync/status');
         if (!res.ok) return;
@@ -46,9 +62,23 @@ export default function SyncingPage() {
           syncDone: number | null;
           syncTotal: number | null;
         };
+
         setStatus(data.syncStatus);
         setSyncDone(data.syncDone ?? 0);
         setSyncTotal(data.syncTotal ?? null);
+
+        // Detect stale sync: status is SYNCING but no progress for 30s
+        const currentDone = data.syncDone ?? 0;
+        if (currentDone !== lastProgressRef.current.syncDone) {
+          lastProgressRef.current = { syncDone: currentDone, at: Date.now() };
+        } else if (
+          data.syncStatus === 'SYNCING' &&
+          Date.now() - lastProgressRef.current.at > STALE_THRESHOLD_MS
+        ) {
+          clearInterval(interval);
+          setHasError(true);
+          setStatus('ERROR');
+        }
       } catch {
         // network blip — keep polling
       }
