@@ -154,7 +154,7 @@ export function InventoryFilters({ total, filteredCount, showCollectionSorts = f
               setSearchInput('');
               clearFilters();
             }}
-            className="gap-1 text-muted-foreground"
+            className="gap-1 text-foreground/70"
           >
             <X className="h-3 w-3" />
             Limpar filtros

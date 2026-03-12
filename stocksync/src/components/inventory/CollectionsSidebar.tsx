@@ -33,7 +33,7 @@ export function CollectionsSidebar() {
     `flex items-center justify-between w-full px-2 py-1.5 rounded-md text-sm cursor-pointer transition-colors ${
       active
         ? 'bg-accent text-accent-foreground font-medium'
-        : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+        : 'text-foreground/70 hover:text-foreground hover:bg-accent/50'
     }`;
 
   return (
