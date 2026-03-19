@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   let shopifyRes: Response;
   try {
     shopifyRes = await fetch(
-      `https://${shopifyDomain}/admin/api/2024-01/shop.json`,
+      `https://${shopifyDomain}/admin/api/2026-01/shop.json`,
       {
         headers: { 'X-Shopify-Access-Token': accessToken },
         signal: AbortSignal.timeout(10000),

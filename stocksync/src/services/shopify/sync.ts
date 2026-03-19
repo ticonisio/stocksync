@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
 import type { ShopifyProduct, ShopifyVariant, ShopifyCollection, ShopifyCollect } from '@/types/shopify';
 
-const SHOPIFY_API_VERSION = '2024-01';
+const SHOPIFY_API_VERSION = '2026-01';
 const PAGE_SIZE = 250;
 const REQUEST_DELAY_MS = 500;
 const MAX_RETRIES = 3;
