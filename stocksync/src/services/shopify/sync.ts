@@ -52,15 +52,33 @@ async function fetchProductsPage(
 }
 
 async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): Promise<void> {
-  for (const p of products) {
-    const product = await prisma.product.upsert({
-      where: { storeId_shopifyProductId: { storeId, shopifyProductId: String(p.id) } },
-      update: { title: p.title, handle: p.handle },
-      create: { storeId, shopifyProductId: String(p.id), title: p.title, handle: p.handle },
-    });
+  // Batch upserts in a single transaction for performance
+  await prisma.$transaction(
+    products.map((p) =>
+      prisma.product.upsert({
+        where: { storeId_shopifyProductId: { storeId, shopifyProductId: String(p.id) } },
+        update: { title: p.title, handle: p.handle },
+        create: { storeId, shopifyProductId: String(p.id), title: p.title, handle: p.handle },
+      })
+    )
+  );
 
-    for (const v of p.variants) {
-      await prisma.variant.upsert({
+  // Fetch all products from this page to get their IDs for variant association
+  const productRecords = await prisma.product.findMany({
+    where: {
+      storeId,
+      shopifyProductId: { in: products.map((p) => String(p.id)) },
+    },
+    select: { id: true, shopifyProductId: true },
+  });
+  const productIdMap = new Map(productRecords.map((r) => [r.shopifyProductId, r.id]));
+
+  // Batch all variant upserts in a single transaction
+  const variantOps = products.flatMap((p) => {
+    const productId = productIdMap.get(String(p.id));
+    if (!productId) return [];
+    return p.variants.map((v) =>
+      prisma.variant.upsert({
         where: { storeId_shopifyVariantId: { storeId, shopifyVariantId: String(v.id) } },
         update: {
           title: v.title,
@@ -69,14 +87,20 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
         },
         create: {
           storeId,
-          productId: product.id,
+          productId,
           shopifyVariantId: String(v.id),
           title: v.title,
           sku: v.sku ?? null,
           availableStock: v.inventory_quantity,
         },
-      });
-    }
+      })
+    );
+  });
+
+  // Process variants in chunks of 50 to avoid transaction size limits
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < variantOps.length; i += CHUNK_SIZE) {
+    await prisma.$transaction(variantOps.slice(i, i + CHUNK_SIZE));
   }
 }
 
@@ -104,18 +128,21 @@ async function fetchAllCollections(
 async function syncCollections(storeId: string, domain: string, token: string): Promise<void> {
   const collections = await fetchAllCollections(domain, token);
 
-  for (const c of collections) {
-    await prisma.collection.upsert({
-      where: { storeId_shopifyCollectionId: { storeId, shopifyCollectionId: String(c.id) } },
-      update: { title: c.title, handle: c.handle },
-      create: {
-        storeId,
-        shopifyCollectionId: String(c.id),
-        title: c.title,
-        handle: c.handle,
-      },
-    });
-  }
+  // Batch all collection upserts in a single transaction
+  await prisma.$transaction(
+    collections.map((c) =>
+      prisma.collection.upsert({
+        where: { storeId_shopifyCollectionId: { storeId, shopifyCollectionId: String(c.id) } },
+        update: { title: c.title, handle: c.handle },
+        create: {
+          storeId,
+          shopifyCollectionId: String(c.id),
+          title: c.title,
+          handle: c.handle,
+        },
+      })
+    )
+  );
 }
 
 async function fetchCollectsPage(
@@ -146,35 +173,39 @@ async function syncCollects(storeId: string, domain: string, token: string): Pro
 
     if (collects.length === 0) break;
 
-    for (const c of collects) {
-      const product = await prisma.product.findUnique({
-        where: {
-          storeId_shopifyProductId: { storeId, shopifyProductId: String(c.product_id) },
-        },
-        select: { id: true },
-      });
-      const collection = await prisma.collection.findUnique({
-        where: {
-          storeId_shopifyCollectionId: {
-            storeId,
-            shopifyCollectionId: String(c.collection_id),
-          },
-        },
-        select: { id: true },
-      });
+    // Pre-fetch all products and collections for this batch to avoid N+1 queries
+    const shopifyProductIds = collects.map((c) => String(c.product_id));
+    const shopifyCollectionIds = collects.map((c) => String(c.collection_id));
 
-      if (!product || !collection) continue;
+    const [products, collections] = await Promise.all([
+      prisma.product.findMany({
+        where: { storeId, shopifyProductId: { in: shopifyProductIds } },
+        select: { id: true, shopifyProductId: true },
+      }),
+      prisma.collection.findMany({
+        where: { storeId, shopifyCollectionId: { in: shopifyCollectionIds } },
+        select: { id: true, shopifyCollectionId: true },
+      }),
+    ]);
 
-      await prisma.productCollection.upsert({
-        where: {
-          productId_collectionId: {
-            productId: product.id,
-            collectionId: collection.id,
-          },
-        },
-        update: {},
-        create: { productId: product.id, collectionId: collection.id },
-      });
+    const productMap = new Map(products.map((p) => [p.shopifyProductId, p.id]));
+    const collectionMap = new Map(collections.map((c) => [c.shopifyCollectionId, c.id]));
+
+    const upsertOps = collects
+      .map((c) => {
+        const productId = productMap.get(String(c.product_id));
+        const collectionId = collectionMap.get(String(c.collection_id));
+        if (!productId || !collectionId) return null;
+        return prisma.productCollection.upsert({
+          where: { productId_collectionId: { productId, collectionId } },
+          update: {},
+          create: { productId, collectionId },
+        });
+      })
+      .filter((op): op is NonNullable<typeof op> => op !== null);
+
+    if (upsertOps.length > 0) {
+      await prisma.$transaction(upsertOps);
     }
 
     cursor = nextCursor;

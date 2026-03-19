@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 type SyncStatus = 'PENDING' | 'SYNCING' | 'COMPLETE' | 'ERROR';
 
 const MAX_POLL_TIME_MS = 5 * 60 * 1000; // 5 minutes
-const STALE_THRESHOLD_MS = 30 * 1000; // 30s without progress = stale
+const STALE_THRESHOLD_MS = 90 * 1000; // 90s without progress = stale (large stores need more time)
 
 export default function SyncingPage() {
   const router = useRouter();
@@ -67,7 +67,7 @@ export default function SyncingPage() {
         setSyncDone(data.syncDone ?? 0);
         setSyncTotal(data.syncTotal ?? null);
 
-        // Detect stale sync: status is SYNCING but no progress for 30s
+        // Detect stale sync: status is SYNCING but no progress for 90s
         const currentDone = data.syncDone ?? 0;
         if (currentDone !== lastProgressRef.current.syncDone) {
           lastProgressRef.current = { syncDone: currentDone, at: Date.now() };
