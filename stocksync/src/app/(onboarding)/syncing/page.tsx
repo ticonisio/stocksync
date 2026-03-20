@@ -40,6 +40,9 @@ export default function SyncingPage() {
     try {
       let hasMore = true;
 
+      let retries = 0;
+      const MAX_RETRIES = 2;
+
       while (hasMore) {
         // Timeout check
         if (Date.now() - startTimeRef.current > MAX_POLL_TIME_MS) {
@@ -49,16 +52,32 @@ export default function SyncingPage() {
           break;
         }
 
-        const res = await fetch('/api/shopify/sync', { method: 'POST' });
+        let res: Response;
+        try {
+          res = await fetch('/api/shopify/sync', { method: 'POST' });
+        } catch {
+          // Network error or timeout — retry up to MAX_RETRIES
+          retries++;
+          if (retries > MAX_RETRIES) {
+            setHasError(true);
+            setStatus('ERROR');
+            setErrorMessage(`Erro de rede após ${MAX_RETRIES} tentativas. O progresso foi salvo — clique para continuar.`);
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
 
         if (!res.ok) {
+          const text = await res.text().catch(() => '');
           setHasError(true);
           setStatus('ERROR');
-          setErrorMessage('Erro de comunicação com o servidor.');
+          setErrorMessage(`Erro do servidor (HTTP ${res.status}): ${text.slice(0, 200)}`);
           break;
         }
 
         const data: SyncBatchResponse = await res.json();
+        retries = 0; // Reset retries on success
 
         setSyncDone(data.syncDone);
         setBatchCount((prev) => prev + 1);
@@ -67,7 +86,7 @@ export default function SyncingPage() {
         if (data.status === 'error') {
           setHasError(true);
           setStatus('ERROR');
-          setErrorMessage(data.error ?? null);
+          setErrorMessage(data.error ?? 'Erro desconhecido durante sincronização.');
           break;
         }
 
@@ -80,10 +99,10 @@ export default function SyncingPage() {
           if (hasMore) await new Promise((r) => setTimeout(r, 100));
         }
       }
-    } catch {
+    } catch (err) {
       setHasError(true);
       setStatus('ERROR');
-      setErrorMessage('Erro de rede. Verifique sua conexão e tente novamente.');
+      setErrorMessage(`Erro inesperado: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       isSyncingRef.current = false;
     }
