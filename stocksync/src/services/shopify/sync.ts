@@ -3,7 +3,7 @@ import { decrypt } from '@/lib/encrypt';
 import type { ShopifyProduct, ShopifyVariant, ShopifyCollection, ShopifyCollect } from '@/types/shopify';
 
 const SHOPIFY_API_VERSION = '2026-01';
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 const PAGES_PER_BATCH = 1;
 const REQUEST_DELAY_MS = 500;
 const MAX_RETRIES = 3;
@@ -23,7 +23,7 @@ function delay(ms: number): Promise<void> {
 async function fetchWithRetry(url: string, token: string, attempt = 0): Promise<Response> {
   const res = await fetch(url, {
     headers: { 'X-Shopify-Access-Token': token },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (res.status === 429 && attempt < MAX_RETRIES) {
