@@ -3,7 +3,7 @@ import { decrypt } from '@/lib/encrypt';
 import type { ShopifyProduct, ShopifyVariant, ShopifyCollection, ShopifyCollect } from '@/types/shopify';
 
 const SHOPIFY_API_VERSION = '2026-01';
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 50;
 const PAGES_PER_BATCH = 1;
 const REQUEST_DELAY_MS = 500;
 const MAX_RETRIES = 3;
