@@ -19,8 +19,8 @@ export async function POST() {
 
   // Fire-and-forget: respond immediately, sync runs in background.
   // Error handling is inside syncStore (sets syncStatus to ERROR on failure).
-  syncStore(store.id).catch(() => {
-    // syncStore already sets syncStatus: 'ERROR' in its own catch block
+  syncStore(store.id).catch((err) => {
+    console.error('[sync] syncStore failed:', err);
   });
 
   return NextResponse.json({ status: 'started' });
