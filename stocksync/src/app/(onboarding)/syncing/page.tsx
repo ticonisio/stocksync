@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 
 type SyncStatus = 'PENDING' | 'SYNCING' | 'COMPLETE' | 'ERROR';
 
-const MAX_POLL_TIME_MS = 5 * 60 * 1000; // 5 minutes
-const STALE_THRESHOLD_MS = 90 * 1000; // 90s without progress = stale (large stores need more time)
+const MAX_POLL_TIME_MS = 10 * 60 * 1000; // 10 minutes (sync runs server-side, may take a while)
+const STALE_THRESHOLD_MS = 3 * 60 * 1000; // 3min without progress = stale (token validation + first page can take time)
 
 export default function SyncingPage() {
   const router = useRouter();
@@ -25,12 +25,10 @@ export default function SyncingPage() {
     setSyncDone(0);
     startTimeRef.current = Date.now();
     lastProgressRef.current = { syncDone: 0, at: Date.now() };
-    try {
-      await fetch('/api/shopify/sync', { method: 'POST' });
-    } catch {
-      setHasError(true);
-      setStatus('ERROR');
-    }
+    // Fire-and-forget: sync runs server-side, polling tracks progress
+    fetch('/api/shopify/sync', { method: 'POST' }).catch(() => {
+      // Network error — polling will detect the failure via sync status
+    });
   }, []);
 
   useEffect(() => {

@@ -1,11 +1,10 @@
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { syncStore } from '@/services/shopify/sync';
-import { waitUntil } from '@vercel/functions';
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -18,12 +17,11 @@ export async function POST() {
     return NextResponse.json({ error: 'No store connected' }, { status: 404 });
   }
 
-  // waitUntil keeps the serverless function alive after responding
-  waitUntil(
-    syncStore(store.id).catch((err) => {
-      console.error('[sync] syncStore failed:', err);
-    })
-  );
-
-  return NextResponse.json({ status: 'started' });
+  try {
+    await syncStore(store.id);
+    return NextResponse.json({ status: 'complete' });
+  } catch (err) {
+    console.error('[sync] syncStore failed:', err);
+    return NextResponse.json({ status: 'error' });
+  }
 }
