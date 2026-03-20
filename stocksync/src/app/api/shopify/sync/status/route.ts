@@ -16,6 +16,7 @@ export async function GET() {
 
   return NextResponse.json({
     syncStatus: store.syncStatus,
+    syncError: store.syncError,
     syncDone: store.syncDone,
     syncTotal: store.syncTotal,
     lastSyncedAt: store.lastSyncedAt,

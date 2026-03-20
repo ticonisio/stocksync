@@ -26,10 +26,49 @@ async function fetchWithRetry(url: string, token: string, attempt = 0): Promise<
   }
 
   if (!res.ok) {
-    throw new Error(`Shopify API error: ${res.status} ${url}`);
+    let errorBody = '';
+    try {
+      errorBody = await res.text();
+    } catch {
+      errorBody = '(could not read response body)';
+    }
+    console.error(`[sync] Shopify API error: ${res.status} ${url}`, errorBody);
+
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `Token inválido ou expirado (HTTP ${res.status}). Reconecte sua loja com um novo token.`
+      );
+    }
+
+    throw new Error(`Shopify API error: ${res.status} ${url} — ${errorBody.slice(0, 200)}`);
   }
 
   return res;
+}
+
+async function validateToken(domain: string, token: string): Promise<void> {
+  const res = await fetch(
+    `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/shop.json`,
+    {
+      headers: { 'X-Shopify-Access-Token': token },
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+
+  if (!res.ok) {
+    let errorBody = '';
+    try {
+      errorBody = await res.text();
+    } catch {
+      errorBody = '';
+    }
+    console.error(`[sync] Token validation failed: ${res.status}`, errorBody);
+    throw new Error(
+      `Token inválido ou expirado (HTTP ${res.status}). Reconecte sua loja com um novo token.`
+    );
+  }
+
+  console.log(`[sync] Token validated successfully for ${domain}`);
 }
 
 async function fetchProductsPage(
@@ -219,10 +258,15 @@ export async function syncStore(storeId: string): Promise<void> {
   const accessToken = decrypt(store.accessTokenEncrypted);
   const domain = store.shopifyDomain;
 
+  console.log(`[sync] Starting sync for store ${storeId} (${domain})`);
+
   try {
+    // Validate token before starting sync
+    await validateToken(domain, accessToken);
+
     await prisma.store.update({
       where: { id: storeId },
-      data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: null },
+      data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: null, syncError: null },
     });
 
     let cursor: string | undefined;
@@ -250,9 +294,11 @@ export async function syncStore(storeId: string): Promise<void> {
       data: { syncStatus: 'COMPLETE', lastSyncedAt: new Date() },
     });
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error(`[sync] Sync failed for store ${storeId}:`, errorMessage);
     await prisma.store.update({
       where: { id: storeId },
-      data: { syncStatus: 'ERROR' },
+      data: { syncStatus: 'ERROR', syncError: errorMessage },
     }).catch(() => {
       // If even this fails (DB down), there's nothing more we can do
     });
