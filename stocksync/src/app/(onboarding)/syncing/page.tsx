@@ -13,13 +13,11 @@ type SyncBatchResponse = {
 };
 
 const MAX_POLL_TIME_MS = 30 * 60 * 1000; // 30 minutes (batched sync takes longer but is more reliable)
-const STALE_THRESHOLD_MS = 3 * 60 * 1000; // 3min without progress = stale
 
 export default function SyncingPage() {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatus>('PENDING');
   const [syncDone, setSyncDone] = useState(0);
-  const [syncTotal, setSyncTotal] = useState<number | null>(null);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState(0);
