@@ -3,10 +3,18 @@ import { decrypt } from '@/lib/encrypt';
 import type { ShopifyProduct, ShopifyVariant, ShopifyCollection, ShopifyCollect } from '@/types/shopify';
 
 const SHOPIFY_API_VERSION = '2026-01';
-const PAGE_SIZE = 250;
+const PAGE_SIZE = 200;
+const PAGES_PER_BATCH = 1;
 const REQUEST_DELAY_MS = 500;
 const MAX_RETRIES = 3;
-const MAX_PAGES = 100; // Safety: max 25,000 products (100 * 250)
+const MAX_PAGES = 200; // Safety: max 40,000 products (200 * 200)
+
+export type SyncBatchResult = {
+  status: 'syncing' | 'complete' | 'error';
+  syncDone: number;
+  hasMore: boolean;
+  error?: string;
+};
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,7 +99,6 @@ async function fetchProductsPage(
 }
 
 async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): Promise<void> {
-  // Batch upserts in a single transaction for performance
   await prisma.$transaction(
     products.map((p) =>
       prisma.product.upsert({
@@ -102,7 +109,6 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
     )
   );
 
-  // Fetch all products from this page to get their IDs for variant association
   const productRecords = await prisma.product.findMany({
     where: {
       storeId,
@@ -112,7 +118,6 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
   });
   const productIdMap = new Map(productRecords.map((r) => [r.shopifyProductId, r.id]));
 
-  // Batch all variant upserts in a single transaction
   const variantOps = products.flatMap((p) => {
     const productId = productIdMap.get(String(p.id));
     if (!productId) return [];
@@ -136,7 +141,6 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
     );
   });
 
-  // Process variants in chunks of 50 to avoid transaction size limits
   const CHUNK_SIZE = 50;
   for (let i = 0; i < variantOps.length; i += CHUNK_SIZE) {
     await prisma.$transaction(variantOps.slice(i, i + CHUNK_SIZE));
@@ -167,7 +171,6 @@ async function fetchAllCollections(
 async function syncCollections(storeId: string, domain: string, token: string): Promise<void> {
   const collections = await fetchAllCollections(domain, token);
 
-  // Batch all collection upserts in a single transaction
   await prisma.$transaction(
     collections.map((c) =>
       prisma.collection.upsert({
@@ -212,7 +215,6 @@ async function syncCollects(storeId: string, domain: string, token: string): Pro
 
     if (collects.length === 0) break;
 
-    // Pre-fetch all products and collections for this batch to avoid N+1 queries
     const shopifyProductIds = collects.map((c) => String(c.product_id));
     const shopifyCollectionIds = collects.map((c) => String(c.collection_id));
 
@@ -253,56 +255,94 @@ async function syncCollects(storeId: string, domain: string, token: string): Pro
   } while (cursor && page < MAX_PAGES);
 }
 
-export async function syncStore(storeId: string): Promise<void> {
+/**
+ * Sync one batch of products (up to BATCH_LIMIT).
+ * Resumes from the stored cursor and saves the next cursor for the following batch.
+ * After all products are synced, also syncs collections and collects.
+ */
+export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> {
   const store = await prisma.store.findUniqueOrThrow({ where: { id: storeId } });
   const accessToken = decrypt(store.accessTokenEncrypted);
   const domain = store.shopifyDomain;
 
-  console.log(`[sync] Starting sync for store ${storeId} (${domain})`);
-
   try {
-    // Validate token before starting sync
-    await validateToken(domain, accessToken);
+    // First batch: validate token and reset state
+    if (!store.syncCursor && store.syncStatus !== 'SYNCING') {
+      await validateToken(domain, accessToken);
+      await prisma.store.update({
+        where: { id: storeId },
+        data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: null, syncError: null, syncCursor: null },
+      });
+    }
 
-    await prisma.store.update({
-      where: { id: storeId },
-      data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: null, syncError: null },
-    });
+    let cursor: string | undefined = store.syncCursor ?? undefined;
+    let pagesProcessed = 0;
+    let totalDone = store.syncDone ?? 0;
 
-    let cursor: string | undefined;
-    let totalUpserted = 0;
-    let page = 0;
-
-    do {
+    // Fetch pages until we reach PAGES_PER_BATCH limit
+    while (pagesProcessed < PAGES_PER_BATCH) {
       const { products, nextCursor } = await fetchProductsPage(domain, accessToken, cursor);
 
-      if (products.length === 0) break;
+      if (products.length === 0) {
+        cursor = undefined;
+        break;
+      }
 
       await upsertProductsPage(storeId, products);
-      totalUpserted += products.length;
-      await prisma.store.update({ where: { id: storeId }, data: { syncDone: totalUpserted } });
-      cursor = nextCursor;
-      page++;
-      if (cursor) await delay(REQUEST_DELAY_MS);
-    } while (cursor && page < MAX_PAGES);
+      totalDone += products.length;
+      pagesProcessed++;
 
+      await prisma.store.update({
+        where: { id: storeId },
+        data: { syncDone: totalDone, syncCursor: nextCursor ?? null },
+      });
+
+      cursor = nextCursor;
+      if (!cursor) break;
+      if (pagesProcessed < PAGES_PER_BATCH) await delay(REQUEST_DELAY_MS);
+    }
+
+    // If there's still a cursor, there are more products to sync
+    if (cursor) {
+      console.log(`[sync] Batch complete for ${domain}: ${totalDone} products so far, resuming later`);
+      return { status: 'syncing', syncDone: totalDone, hasMore: true };
+    }
+
+    // All products done — sync collections and collects
+    console.log(`[sync] All products synced for ${domain} (${totalDone}), syncing collections...`);
     await syncCollections(storeId, domain, accessToken);
     await syncCollects(storeId, domain, accessToken);
 
     await prisma.store.update({
       where: { id: storeId },
-      data: { syncStatus: 'COMPLETE', lastSyncedAt: new Date() },
+      data: { syncStatus: 'COMPLETE', syncCursor: null, lastSyncedAt: new Date() },
     });
+
+    console.log(`[sync] Sync complete for ${domain}: ${totalDone} products, collections synced`);
+    return { status: 'complete', syncDone: totalDone, hasMore: false };
+
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`[sync] Sync failed for store ${storeId}:`, errorMessage);
+    console.error(`[sync] Sync batch failed for store ${storeId}:`, errorMessage);
     await prisma.store.update({
       where: { id: storeId },
-      data: { syncStatus: 'ERROR', syncError: errorMessage },
-    }).catch(() => {
-      // If even this fails (DB down), there's nothing more we can do
-    });
-    throw err;
+      data: { syncStatus: 'ERROR', syncError: errorMessage, syncCursor: null },
+    }).catch(() => {});
+    return { status: 'error', syncDone: store.syncDone ?? 0, hasMore: false, error: errorMessage };
+  }
+}
+
+/**
+ * @deprecated Use syncStoreBatch for chunked sync. Kept for backward compatibility.
+ */
+export async function syncStore(storeId: string): Promise<void> {
+  let result: SyncBatchResult;
+  do {
+    result = await syncStoreBatch(storeId);
+  } while (result.hasMore);
+
+  if (result.status === 'error') {
+    throw new Error(result.error);
   }
 }
 

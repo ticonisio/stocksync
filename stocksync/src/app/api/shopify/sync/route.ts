@@ -1,10 +1,10 @@
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { syncStore } from '@/services/shopify/sync';
+import { syncStoreBatch } from '@/services/shopify/sync';
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -18,10 +18,10 @@ export async function POST() {
   }
 
   try {
-    await syncStore(store.id);
-    return NextResponse.json({ status: 'complete' });
+    const result = await syncStoreBatch(store.id);
+    return NextResponse.json(result);
   } catch (err) {
-    console.error('[sync] syncStore failed:', err);
-    return NextResponse.json({ status: 'error' });
+    console.error('[sync] syncStoreBatch failed:', err);
+    return NextResponse.json({ status: 'error', syncDone: 0, hasMore: false });
   }
 }

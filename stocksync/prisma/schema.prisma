@@ -73,6 +73,7 @@ model Store {
   syncError            String?         @db.Text
   syncTotal            Int?
   syncDone             Int?
+  syncCursor           String?
   lastSyncedAt         DateTime?
   user                 User            @relation(fields: [userId], references: [id])
   products             Product[]
