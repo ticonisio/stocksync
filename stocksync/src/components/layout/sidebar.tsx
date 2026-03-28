@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { LayoutGrid, TrendingUp, Clock, Settings, LogOut } from 'lucide-react';
+import { LayoutGrid, TrendingUp, Clock, Settings, LogOut, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CollectionsSidebar } from '@/components/inventory/CollectionsSidebar';
 
@@ -12,10 +12,15 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/insights', label: 'Insights', icon: TrendingUp },
   { href: '/lead-time', label: 'Tempo de Entrega', icon: Clock },
+  { href: '/imports', label: 'Importações', icon: FileSpreadsheet },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  criticalCount?: number;
+}
+
+export function Sidebar({ criticalCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
 
@@ -45,6 +50,11 @@ export function Sidebar() {
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
+                {item.href === '/lead-time' && criticalCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-auto">
+                    {criticalCount}
+                  </span>
+                )}
               </Button>
             </Link>
           );

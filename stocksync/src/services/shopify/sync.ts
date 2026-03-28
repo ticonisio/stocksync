@@ -12,6 +12,7 @@ const MAX_PAGES = 200; // Safety: max 40,000 products (200 * 200)
 export type SyncBatchResult = {
   status: 'syncing' | 'complete' | 'error';
   syncDone: number;
+  syncTotal: number | null;
   hasMore: boolean;
   error?: string;
 };
@@ -52,6 +53,13 @@ async function fetchWithRetry(url: string, token: string, attempt = 0): Promise<
   }
 
   return res;
+}
+
+async function fetchProductCount(domain: string, token: string): Promise<number> {
+  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/products/count.json`;
+  const res = await fetchWithRetry(url, token);
+  const data = (await res.json()) as { count: number };
+  return data.count;
 }
 
 async function validateToken(domain: string, token: string): Promise<void> {
@@ -266,13 +274,15 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
   const domain = store.shopifyDomain;
 
   try {
-    // First batch: validate token and reset state
+    // First batch: validate token, fetch total count, and reset state
     if (!store.syncCursor && store.syncStatus !== 'SYNCING') {
       await validateToken(domain, accessToken);
+      const productCount = await fetchProductCount(domain, accessToken);
       await prisma.store.update({
         where: { id: storeId },
-        data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: null, syncError: null, syncCursor: null },
+        data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: productCount, syncError: null, syncCursor: null },
       });
+      store.syncTotal = productCount;
     }
 
     let cursor: string | undefined = store.syncCursor ?? undefined;
@@ -304,8 +314,8 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
 
     // If there's still a cursor, there are more products to sync
     if (cursor) {
-      console.log(`[sync] Batch complete for ${domain}: ${totalDone} products so far, resuming later`);
-      return { status: 'syncing', syncDone: totalDone, hasMore: true };
+      console.log(`[sync] Batch complete for ${domain}: ${totalDone}/${store.syncTotal ?? '?'} products so far, resuming later`);
+      return { status: 'syncing', syncDone: totalDone, syncTotal: store.syncTotal, hasMore: true };
     }
 
     // All products done — sync collections and collects
@@ -319,7 +329,7 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
     });
 
     console.log(`[sync] Sync complete for ${domain}: ${totalDone} products, collections synced`);
-    return { status: 'complete', syncDone: totalDone, hasMore: false };
+    return { status: 'complete', syncDone: totalDone, syncTotal: store.syncTotal, hasMore: false };
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -328,7 +338,7 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
       where: { id: storeId },
       data: { syncStatus: 'ERROR', syncError: errorMessage, syncCursor: null },
     }).catch(() => {});
-    return { status: 'error', syncDone: store.syncDone ?? 0, hasMore: false, error: errorMessage };
+    return { status: 'error', syncDone: store.syncDone ?? 0, syncTotal: store.syncTotal, hasMore: false, error: errorMessage };
   }
 }
 

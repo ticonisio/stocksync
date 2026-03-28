@@ -126,7 +126,7 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                     </TableCell>
                     <TableCell className="py-3">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">{product.title}</span>
+                        <span className="font-semibold text-foreground">{product.title}</span>
                         {isOutOfStock && (
                           <Badge variant="destructive" className="text-xs">
                             Esgotado
@@ -140,10 +140,10 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                     <TableCell className="text-right py-3 font-mono text-sm">
                       {product.availableRollup}
                     </TableCell>
-                    <TableCell className="text-right py-3 font-mono text-sm text-amber-600">
+                    <TableCell className="text-right py-3 font-mono text-sm text-amber-600 dark:text-amber-400">
                       {product.reservedRollup > 0 ? product.reservedRollup : '—'}
                     </TableCell>
-                    <TableCell className="text-right py-3 font-mono text-sm text-blue-600">
+                    <TableCell className="text-right py-3 font-mono text-sm text-blue-600 dark:text-blue-400">
                       {product.committedRollup > 0 ? product.committedRollup : '—'}
                     </TableCell>
                   </TableRow>
@@ -164,10 +164,10 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                         <TableCell className="text-right py-2 font-mono text-sm">
                           {variant.availableStock}
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-sm text-amber-600">
+                        <TableCell className="text-right py-2 font-mono text-sm text-amber-600 dark:text-amber-400">
                           {variant.reservedStock > 0 ? variant.reservedStock : '—'}
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-sm text-blue-600">
+                        <TableCell className="text-right py-2 font-mono text-sm text-blue-600 dark:text-blue-400">
                           {variant.committedStock > 0 ? variant.committedStock : '—'}
                         </TableCell>
                       </TableRow>

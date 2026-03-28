@@ -55,10 +55,12 @@ async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): 
       });
     }
 
-    await prisma.variant.update({
-      where: { id: variant.id },
-      data: { availableStock: Math.max(0, variant.availableStock - item.quantity) },
-    });
+    // Atomic decrement to avoid race conditions between concurrent webhooks
+    await prisma.$executeRaw`
+      UPDATE "Variant"
+      SET "availableStock" = GREATEST(0, "availableStock" - ${item.quantity})
+      WHERE "id" = ${variant.id}
+    `;
   }
 }
 

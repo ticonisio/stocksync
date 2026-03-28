@@ -8,6 +8,7 @@ type SyncStatus = 'PENDING' | 'SYNCING' | 'COMPLETE' | 'ERROR';
 type SyncBatchResponse = {
   status: 'syncing' | 'complete' | 'error';
   syncDone: number;
+  syncTotal: number | null;
   hasMore: boolean;
   error?: string;
 };
@@ -18,6 +19,7 @@ export default function SyncingPage() {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatus>('PENDING');
   const [syncDone, setSyncDone] = useState(0);
+  const [syncTotal, setSyncTotal] = useState<number | null>(null);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [batchCount, setBatchCount] = useState(0);
@@ -33,6 +35,7 @@ export default function SyncingPage() {
     setErrorMessage(null);
     setStatus('SYNCING');
     setSyncDone(0);
+    setSyncTotal(null);
     setBatchCount(0);
     startTimeRef.current = Date.now();
     lastProgressRef.current = { syncDone: 0, at: Date.now() };
@@ -80,6 +83,7 @@ export default function SyncingPage() {
         retries = 0; // Reset retries on success
 
         setSyncDone(data.syncDone);
+        if (data.syncTotal != null) setSyncTotal(data.syncTotal);
         setBatchCount((prev) => prev + 1);
         lastProgressRef.current = { syncDone: data.syncDone, at: Date.now() };
 
@@ -119,9 +123,13 @@ export default function SyncingPage() {
     }
   }, [status, router]);
 
+  const progressPercent = syncTotal && syncTotal > 0 ? Math.min(Math.round((syncDone / syncTotal) * 100), 100) : null;
+
   const progressText =
     syncDone > 0
-      ? `${syncDone} produto${syncDone !== 1 ? 's' : ''} sincronizado${syncDone !== 1 ? 's' : ''}${batchCount > 1 ? ` (lote ${batchCount})` : ''}`
+      ? syncTotal
+        ? `${syncDone} de ${syncTotal} produtos sincronizados`
+        : `${syncDone} produto${syncDone !== 1 ? 's' : ''} sincronizado${syncDone !== 1 ? 's' : ''}`
       : 'Iniciando sincronização...';
 
   const isTokenError = errorMessage?.includes('Token inválido') || errorMessage?.includes('401') || errorMessage?.includes('403');
@@ -189,10 +197,21 @@ export default function SyncingPage() {
       </div>
       <h1 className="text-2xl font-bold text-foreground">Sincronizando sua loja...</h1>
       <p className="text-muted-foreground max-w-sm">
-        Estamos importando seus produtos, variantes e coleções da Shopify em lotes de 200.
+        Estamos importando seus produtos, variantes e coleções da Shopify.
         {batchCount > 0 ? ' Cada lote é salvo automaticamente.' : ''}
       </p>
       <p className="text-sm text-muted-foreground">{progressText}</p>
+      {progressPercent != null && (
+        <div className="w-full max-w-xs mx-auto space-y-1">
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{progressPercent}%</p>
+        </div>
+      )}
     </div>
   );
 }

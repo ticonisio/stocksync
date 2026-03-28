@@ -7,6 +7,9 @@ import type { Prisma } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InventoryTable } from '@/components/inventory/InventoryTable';
 import { InventoryFilters } from '@/components/inventory/InventoryFilters';
+import { getUrgencyItems } from '@/services/inventory/urgency-service';
+import { UrgencyDashboardCards } from '@/components/dashboard/UrgencyDashboardCards';
+import { ReorderAlertBanner } from '@/components/dashboard/ReorderAlertBanner';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -29,6 +32,12 @@ export default async function DashboardPage({
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+
+  // Urgency data for dashboard cards and banner
+  const urgencyItems = await getUrgencyItems(store.id, '30d');
+  const urgencyCritical = urgencyItems.filter((i) => i.status === 'CRÍTICO').length;
+  const urgencyWarning = urgencyItems.filter((i) => i.status === 'ATENÇÃO').length;
+  const urgencyOk = urgencyItems.filter((i) => i.status === 'OK').length;
 
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10));
   const skip = (page - 1) * ITEMS_PER_PAGE;
@@ -173,6 +182,9 @@ export default async function DashboardPage({
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
       )}
 
+      {/* Reorder alert banner */}
+      <ReorderAlertBanner critical={urgencyCritical} />
+
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card>
@@ -203,17 +215,22 @@ export default async function DashboardPage({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground text-amber-600">
+            <CardTitle className="text-sm font-medium text-muted-foreground text-amber-600 dark:text-amber-400">
               Reservado
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-amber-600">
+            <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
               {allStats._sum.reservedStock ?? 0}
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Urgency cards */}
+      <Suspense fallback={null}>
+        <UrgencyDashboardCards critical={urgencyCritical} warning={urgencyWarning} ok={urgencyOk} />
+      </Suspense>
 
       {/* Filters — wrapped in Suspense (required for useSearchParams in Next.js 14) */}
       <Suspense fallback={<div className="h-16 bg-muted animate-pulse rounded-md" />}>

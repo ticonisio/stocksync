@@ -18,6 +18,7 @@ export interface UrgencyItem {
   effectiveBuffer: number;
   urgency: number;
   status: 'CRÍTICO' | 'ATENÇÃO' | 'OK';
+  reorderQty: number;
 }
 
 export async function getUrgencyItems(
@@ -99,6 +100,10 @@ export async function getUrgencyItems(
     const status: UrgencyItem['status'] =
       urgency <= 0 ? 'CRÍTICO' : urgency <= effectiveBuffer ? 'ATENÇÃO' : 'OK';
 
+    // Recommended reorder quantity: enough stock to cover lead time + buffer
+    const targetStock = Math.ceil(velocityPerDay * (effectiveLeadTimeDays + effectiveBuffer));
+    const reorderQty = Math.max(0, targetStock - totalAvailableStock);
+
     items.push({
       productId: product.id,
       title: product.title,
@@ -109,6 +114,7 @@ export async function getUrgencyItems(
       effectiveBuffer,
       urgency,
       status,
+      reorderQty,
     });
   }
 

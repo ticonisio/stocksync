@@ -40,7 +40,7 @@ export function InsightCard(props: InsightCardProps) {
             <Package className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-white truncate">{props.title}</p>
+            <p className="font-semibold text-foreground truncate">{props.title}</p>
             <p className="text-sm text-muted-foreground truncate">{props.topVariantTitle}</p>
           </div>
           <div className="text-right flex-shrink-0">
@@ -67,7 +67,7 @@ export function InsightCard(props: InsightCardProps) {
           <Package className="h-5 w-5 text-muted-foreground" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-white truncate">{props.title}</p>
+          <p className="font-semibold text-foreground truncate">{props.title}</p>
           <p className="text-sm text-muted-foreground">{formatVelocity(props.velocityPerDay)}</p>
         </div>
         <div className="text-right flex-shrink-0">

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { Clock } from 'lucide-react';
@@ -7,6 +8,7 @@ import { getUrgencyItems, parsePeriod } from '@/services/inventory/urgency-servi
 import { UrgencyCard } from '@/components/lead-time/UrgencyCard';
 import { UrgencySummary } from '@/components/lead-time/UrgencySummary';
 import { LeadTimePeriodSelector } from '@/components/lead-time/LeadTimePeriodSelector';
+import { LeadTimeAssigner } from '@/components/lead-time/LeadTimeAssigner';
 
 interface LeadTimePageProps {
   searchParams: { period?: string };
@@ -37,6 +39,10 @@ export default async function LeadTimePage({ searchParams }: LeadTimePageProps) 
       </div>
 
       <UrgencySummary critical={critical} warning={warning} ok={ok} />
+
+      <Suspense fallback={null}>
+        <LeadTimeAssigner />
+      </Suspense>
 
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">

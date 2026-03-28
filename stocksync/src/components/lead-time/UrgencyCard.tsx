@@ -40,7 +40,7 @@ export function UrgencyCard({ item }: UrgencyCardProps) {
             <Badge variant={STATUS_VARIANT[item.status]} className="text-xs flex-shrink-0">
               {item.status}
             </Badge>
-            <p className="font-semibold text-white truncate">{item.title}</p>
+            <p className="font-semibold text-foreground truncate">{item.title}</p>
           </div>
           <p className="text-sm text-muted-foreground truncate">{item.topVariantTitle}</p>
         </div>
@@ -50,6 +50,11 @@ export function UrgencyCard({ item }: UrgencyCardProps) {
           </p>
           <p className="text-xs text-muted-foreground">Lead time: {item.leadTimeDays}d</p>
           <p className="text-xs text-muted-foreground">{formatVelocity(item.velocityPerDay)}</p>
+          {item.reorderQty > 0 && (
+            <p className="text-xs font-semibold text-primary">
+              Pedir: {item.reorderQty} un
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -23,7 +23,7 @@ export function UrgencySummary({ critical, warning, ok }: UrgencySummaryProps) {
       </Card>
       <Card>
         <CardContent className="p-4 text-center">
-          <p className="text-2xl font-bold text-green-600">{ok}</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{ok}</p>
           <p className="text-xs text-muted-foreground mt-1">OK</p>
         </CardContent>
       </Card>
