@@ -11,6 +11,12 @@ export interface ShopifyVariant {
   title: string;
   sku: string | null;
   inventory_quantity: number;
+  inventory_item_id: number;
+}
+
+export interface ShopifyInventoryItem {
+  id: number;
+  cost: string | null;
 }
 
 export interface ShopifyCollection {

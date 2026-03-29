@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
-import type { ShopifyProduct, ShopifyVariant, ShopifyCollection, ShopifyCollect } from '@/types/shopify';
+import type { ShopifyProduct, ShopifyVariant, ShopifyInventoryItem, ShopifyCollection } from '@/types/shopify';
 
 const SHOPIFY_API_VERSION = '2026-01';
 const PAGE_SIZE = 25;
@@ -106,7 +106,32 @@ async function fetchProductsPage(
   return { products: data.products ?? [], nextCursor };
 }
 
-async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): Promise<void> {
+async function fetchInventoryItemCosts(
+  domain: string,
+  token: string,
+  inventoryItemIds: number[]
+): Promise<Map<number, number | null>> {
+  const costMap = new Map<number, number | null>();
+  const BATCH = 50; // Shopify allows up to 250 ids per request, but we keep it safe
+
+  for (let i = 0; i < inventoryItemIds.length; i += BATCH) {
+    const batch = inventoryItemIds.slice(i, i + BATCH);
+    const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/inventory_items.json?ids=${batch.join(',')}`;
+    const res = await fetchWithRetry(url, token);
+    const data = (await res.json()) as { inventory_items: ShopifyInventoryItem[] };
+
+    for (const item of data.inventory_items) {
+      const cost = item.cost !== null && item.cost !== undefined ? parseFloat(item.cost) : null;
+      costMap.set(item.id, cost !== null && !isNaN(cost) ? cost : null);
+    }
+
+    if (i + BATCH < inventoryItemIds.length) await delay(REQUEST_DELAY_MS);
+  }
+
+  return costMap;
+}
+
+async function upsertProductsPage(storeId: string, domain: string, token: string, products: ShopifyProduct[]): Promise<void> {
   await prisma.$transaction(
     products.map((p) =>
       prisma.product.upsert({
@@ -116,6 +141,15 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
       })
     )
   );
+
+  // Fetch costs from inventory items API
+  const allVariants = products.flatMap((p) => p.variants);
+  const inventoryItemIds = allVariants
+    .map((v) => v.inventory_item_id)
+    .filter((id): id is number => id != null);
+  const costMap = inventoryItemIds.length > 0
+    ? await fetchInventoryItemCosts(domain, token, inventoryItemIds)
+    : new Map<number, number | null>();
 
   const productRecords = await prisma.product.findMany({
     where: {
@@ -129,13 +163,15 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
   const variantOps = products.flatMap((p) => {
     const productId = productIdMap.get(String(p.id));
     if (!productId) return [];
-    return p.variants.map((v) =>
-      prisma.variant.upsert({
+    return p.variants.map((v) => {
+      const cost = costMap.get(v.inventory_item_id) ?? null;
+      return prisma.variant.upsert({
         where: { storeId_shopifyVariantId: { storeId, shopifyVariantId: String(v.id) } },
         update: {
           title: v.title,
           sku: v.sku ?? null,
           availableStock: v.inventory_quantity,
+          averageCost: cost,
         },
         create: {
           storeId,
@@ -144,9 +180,10 @@ async function upsertProductsPage(storeId: string, products: ShopifyProduct[]): 
           title: v.title,
           sku: v.sku ?? null,
           availableStock: v.inventory_quantity,
+          averageCost: cost,
         },
-      })
-    );
+      });
+    });
   });
 
   const CHUNK_SIZE = 50;
@@ -179,6 +216,8 @@ async function fetchAllCollections(
 async function syncCollections(storeId: string, domain: string, token: string): Promise<void> {
   const collections = await fetchAllCollections(domain, token);
 
+  if (collections.length === 0) return;
+
   await prisma.$transaction(
     collections.map((c) =>
       prisma.collection.upsert({
@@ -193,71 +232,64 @@ async function syncCollections(storeId: string, domain: string, token: string): 
       })
     )
   );
+
+  // Sync product-collection relationships per collection
+  // This works for BOTH smart collections (tag-based) and custom collections
+  for (const collection of collections) {
+    await syncCollectionProducts(storeId, domain, token, collection.id);
+    await delay(REQUEST_DELAY_MS);
+  }
 }
 
-async function fetchCollectsPage(
+async function syncCollectionProducts(
+  storeId: string,
   domain: string,
   token: string,
-  cursor?: string
-): Promise<{ collects: ShopifyCollect[]; nextCursor: string | undefined }> {
-  const url = new URL(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/collects.json`);
-  url.searchParams.set('limit', String(PAGE_SIZE));
-  if (cursor) url.searchParams.set('page_info', cursor);
+  shopifyCollectionId: number
+): Promise<void> {
+  const collectionRecord = await prisma.collection.findUnique({
+    where: { storeId_shopifyCollectionId: { storeId, shopifyCollectionId: String(shopifyCollectionId) } },
+    select: { id: true },
+  });
+  if (!collectionRecord) return;
 
-  const res = await fetchWithRetry(url.toString(), token);
-  const data = (await res.json()) as { collects: ShopifyCollect[] };
-
-  const linkHeader = res.headers.get('Link') ?? '';
-  const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-  const nextCursor = nextMatch?.[1];
-
-  return { collects: data.collects ?? [], nextCursor };
-}
-
-async function syncCollects(storeId: string, domain: string, token: string): Promise<void> {
   let cursor: string | undefined;
   let page = 0;
 
   do {
-    const { collects, nextCursor } = await fetchCollectsPage(domain, token, cursor);
+    const url = new URL(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/products.json`);
+    url.searchParams.set('collection_id', String(shopifyCollectionId));
+    url.searchParams.set('limit', String(PAGE_SIZE));
+    url.searchParams.set('fields', 'id');
+    if (cursor) url.searchParams.set('page_info', cursor);
 
-    if (collects.length === 0) break;
+    const res = await fetchWithRetry(url.toString(), token);
+    const data = (await res.json()) as { products: { id: number }[] };
 
-    const shopifyProductIds = collects.map((c) => String(c.product_id));
-    const shopifyCollectionIds = collects.map((c) => String(c.collection_id));
+    const linkHeader = res.headers.get('Link') ?? '';
+    const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
+    cursor = nextMatch?.[1];
 
-    const [products, collections] = await Promise.all([
-      prisma.product.findMany({
-        where: { storeId, shopifyProductId: { in: shopifyProductIds } },
-        select: { id: true, shopifyProductId: true },
-      }),
-      prisma.collection.findMany({
-        where: { storeId, shopifyCollectionId: { in: shopifyCollectionIds } },
-        select: { id: true, shopifyCollectionId: true },
-      }),
-    ]);
+    if (!data.products || data.products.length === 0) break;
 
-    const productMap = new Map(products.map((p) => [p.shopifyProductId, p.id]));
-    const collectionMap = new Map(collections.map((c) => [c.shopifyCollectionId, c.id]));
+    const shopifyProductIds = data.products.map((p) => String(p.id));
+    const productRecords = await prisma.product.findMany({
+      where: { storeId, shopifyProductId: { in: shopifyProductIds } },
+      select: { id: true },
+    });
 
-    const upsertOps = collects
-      .map((c) => {
-        const productId = productMap.get(String(c.product_id));
-        const collectionId = collectionMap.get(String(c.collection_id));
-        if (!productId || !collectionId) return null;
-        return prisma.productCollection.upsert({
-          where: { productId_collectionId: { productId, collectionId } },
-          update: {},
-          create: { productId, collectionId },
-        });
+    const upsertOps = productRecords.map((p) =>
+      prisma.productCollection.upsert({
+        where: { productId_collectionId: { productId: p.id, collectionId: collectionRecord.id } },
+        update: {},
+        create: { productId: p.id, collectionId: collectionRecord.id },
       })
-      .filter((op): op is NonNullable<typeof op> => op !== null);
+    );
 
     if (upsertOps.length > 0) {
       await prisma.$transaction(upsertOps);
     }
 
-    cursor = nextCursor;
     page++;
     if (cursor) await delay(REQUEST_DELAY_MS);
   } while (cursor && page < MAX_PAGES);
@@ -298,7 +330,7 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
         break;
       }
 
-      await upsertProductsPage(storeId, products);
+      await upsertProductsPage(storeId, domain, accessToken, products);
       totalDone += products.length;
       pagesProcessed++;
 
@@ -318,17 +350,21 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
       return { status: 'syncing', syncDone: totalDone, syncTotal: store.syncTotal, hasMore: true };
     }
 
-    // All products done — sync collections and collects
+    // All products done — sync collections (non-blocking: don't fail the whole sync)
     console.log(`[sync] All products synced for ${domain} (${totalDone}), syncing collections...`);
-    await syncCollections(storeId, domain, accessToken);
-    await syncCollects(storeId, domain, accessToken);
+    try {
+      await syncCollections(storeId, domain, accessToken);
+      console.log(`[sync] Collections synced for ${domain}`);
+    } catch (collErr) {
+      console.error(`[sync] Collection sync failed (non-blocking):`, collErr instanceof Error ? collErr.message : collErr);
+    }
 
     await prisma.store.update({
       where: { id: storeId },
       data: { syncStatus: 'COMPLETE', syncCursor: null, lastSyncedAt: new Date() },
     });
 
-    console.log(`[sync] Sync complete for ${domain}: ${totalDone} products, collections synced`);
+    console.log(`[sync] Sync complete for ${domain}: ${totalDone} products`);
     return { status: 'complete', syncDone: totalDone, syncTotal: store.syncTotal, hasMore: false };
 
   } catch (err) {
@@ -356,4 +392,4 @@ export async function syncStore(storeId: string): Promise<void> {
   }
 }
 
-export type { ShopifyProduct, ShopifyVariant, ShopifyCollection, ShopifyCollect };
+export type { ShopifyProduct, ShopifyVariant, ShopifyInventoryItem, ShopifyCollection };
