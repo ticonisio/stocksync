@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { useInventoryStore, type ProductWithRollup } from '@/store/inventoryStore';
 import { useInventoryRealtime } from '@/hooks/useInventoryRealtime';
+import { formatBRL } from '@/lib/format';
 
 interface InventoryTableProps {
   products: ProductWithRollup[];
@@ -101,6 +102,8 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
               <TableHead className="text-right">Disponível</TableHead>
               <TableHead className="text-right">Reservado</TableHead>
               <TableHead className="text-right">Comprometido</TableHead>
+              <TableHead className="text-right">Custo Médio</TableHead>
+              <TableHead className="text-right">Valor</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -146,6 +149,12 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                     <TableCell className="text-right py-3 font-mono text-sm text-blue-600 dark:text-blue-400">
                       {product.committedRollup > 0 ? product.committedRollup : '—'}
                     </TableCell>
+                    <TableCell className="text-right py-3 font-mono text-sm text-foreground">
+                      {formatBRL(product.avgCostRollup)}
+                    </TableCell>
+                    <TableCell className="text-right py-3 font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                      {formatBRL(product.costRollup)}
+                    </TableCell>
                   </TableRow>
 
                   {isExpanded &&
@@ -169,6 +178,16 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                         </TableCell>
                         <TableCell className="text-right py-2 font-mono text-sm text-blue-600 dark:text-blue-400">
                           {variant.committedStock > 0 ? variant.committedStock : '—'}
+                        </TableCell>
+                        <TableCell className="text-right py-2 font-mono text-sm text-foreground">
+                          {formatBRL(variant.averageCost)}
+                        </TableCell>
+                        <TableCell className="text-right py-2 font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                          {formatBRL(
+                            variant.averageCost != null
+                              ? variant.availableStock * variant.averageCost
+                              : null
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

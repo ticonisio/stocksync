@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 
 export type FilterStatus = 'all' | 'available' | 'reserved' | 'out_of_stock';
-export type SortField = 'name' | 'available' | 'reserved' | 'velocity' | 'urgency';
+export type SortField = 'name' | 'available' | 'reserved' | 'velocity' | 'urgency' | 'value';
 export type SortOrder = 'asc' | 'desc';
 
 export async function GET(req: Request) {

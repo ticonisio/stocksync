@@ -10,6 +10,7 @@ import { InventoryFilters } from '@/components/inventory/InventoryFilters';
 import { getUrgencyItems } from '@/services/inventory/urgency-service';
 import { UrgencyDashboardCards } from '@/components/dashboard/UrgencyDashboardCards';
 import { ReorderAlertBanner } from '@/components/dashboard/ReorderAlertBanner';
+import { formatBRL } from '@/lib/format';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -94,12 +95,25 @@ export default async function DashboardPage({
     prisma.product.count({ where }),
   ]);
 
-  const productsWithRollup = rawProducts.map((p) => ({
-    ...p,
-    availableRollup: p.variants.reduce((s, v) => s + v.availableStock, 0),
-    reservedRollup: p.variants.reduce((s, v) => s + v.reservedStock, 0),
-    committedRollup: p.variants.reduce((s, v) => s + v.committedStock, 0),
-  }));
+  const productsWithRollup = rawProducts.map((p) => {
+    const withCost = p.variants.filter((v) => v.averageCost != null);
+    const costRollup =
+      withCost.length > 0
+        ? withCost.reduce((s, v) => s + v.availableStock * v.averageCost!, 0)
+        : null;
+    const totalQtyWithCost = withCost.reduce((s, v) => s + v.availableStock, 0);
+    const avgCostRollup =
+      costRollup != null && totalQtyWithCost > 0 ? costRollup / totalQtyWithCost : null;
+
+    return {
+      ...p,
+      availableRollup: p.variants.reduce((s, v) => s + v.availableStock, 0),
+      reservedRollup: p.variants.reduce((s, v) => s + v.reservedStock, 0),
+      committedRollup: p.variants.reduce((s, v) => s + v.committedStock, 0),
+      costRollup,
+      avgCostRollup,
+    };
+  });
 
   // Velocity/urgency: only fetch when inside a collection view
   let velMap = new Map<string, number>();
@@ -139,7 +153,13 @@ export default async function DashboardPage({
             )
           : sort === 'urgency'
             ? [...productsWithRollup].sort((a, b) => getUrgencyDays(a) - getUrgencyDays(b))
-            : productsWithRollup;
+            : sort === 'value'
+              ? [...productsWithRollup].sort((a, b) =>
+                  order === 'asc'
+                    ? (a.costRollup ?? 0) - (b.costRollup ?? 0)
+                    : (b.costRollup ?? 0) - (a.costRollup ?? 0)
+                )
+              : productsWithRollup;
 
   // Post-query status filter
   const status = searchParams.status ?? 'all';
@@ -158,6 +178,11 @@ export default async function DashboardPage({
     _sum: { availableStock: true, reservedStock: true, committedStock: true },
     _count: { id: true },
   });
+
+  // Total inventory value (only variants with averageCost)
+  const [{ total: totalInventoryValue }] = await prisma.$queryRaw<
+    [{ total: number | null }]
+  >`SELECT SUM("availableStock" * "averageCost") as total FROM "Variant" WHERE "storeId" = ${store.id} AND "averageCost" IS NOT NULL`;
 
   // Collection header label
   const collectionLabel =
@@ -186,7 +211,7 @@ export default async function DashboardPage({
       <ReorderAlertBanner critical={urgencyCritical} />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Produtos</CardTitle>
@@ -223,6 +248,24 @@ export default async function DashboardPage({
             <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
               {allStats._sum.reservedStock ?? 0}
             </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground text-emerald-600 dark:text-emerald-400">
+              Valor em Estoque
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {totalInventoryValue != null ? (
+              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                {formatBRL(totalInventoryValue)}
+              </p>
+            ) : (
+              <p className="text-3xl font-bold text-muted-foreground" title="Importe uma planilha para calcular custos">
+                —
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

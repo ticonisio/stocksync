@@ -61,7 +61,7 @@ export function InventoryFilters({ total, filteredCount, showCollectionSorts = f
   const hasActiveFilters =
     filters.search || filters.status !== 'all' || filters.sort !== 'name' || filters.order !== 'asc';
 
-  const isComputedSort = ['available', 'reserved', 'velocity', 'urgency'].includes(filters.sort);
+  const isComputedSort = ['available', 'reserved', 'velocity', 'urgency', 'value'].includes(filters.sort);
 
   return (
     <div className="space-y-3">
@@ -140,6 +140,14 @@ export function InventoryFilters({ total, filteredCount, showCollectionSorts = f
                 className="gap-1"
               >
                 Urgência {getSortIcon('urgency')}
+              </Button>
+              <Button
+                variant={filters.sort === 'value' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSortToggle('value')}
+                className="gap-1"
+              >
+                Valor {getSortIcon('value')}
               </Button>
             </>
           )}
