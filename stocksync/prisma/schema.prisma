@@ -125,6 +125,7 @@ model Variant {
   reservedStock    Int             @default(0)
   committedStock   Int             @default(0)
   averageCost      Float?
+  price            Float?
   product          Product         @relation(fields: [productId], references: [id])
   orderItems       OrderItem[]
   salesVelocities  SalesVelocity[]

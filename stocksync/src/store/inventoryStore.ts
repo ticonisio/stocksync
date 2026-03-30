@@ -8,6 +8,7 @@ export interface VariantWithStock {
   reservedStock: number;
   committedStock: number;
   averageCost: number | null;
+  price: number | null;
 }
 
 export interface ProductWithRollup {
@@ -19,6 +20,7 @@ export interface ProductWithRollup {
   committedRollup: number;
   costRollup: number | null;
   avgCostRollup: number | null;
+  priceRollup: number | null;
 }
 
 type VariantPatch = Partial<Pick<VariantWithStock, 'availableStock' | 'reservedStock' | 'committedStock'>>;
@@ -43,12 +45,19 @@ function calcRollup(variants: VariantWithStock[]) {
   const avgCostRollup =
     costRollup != null && totalQtyWithCost > 0 ? costRollup / totalQtyWithCost : null;
 
+  const withPrice = variants.filter((v) => v.price != null);
+  const priceRollup =
+    withPrice.length > 0
+      ? withPrice.reduce((s, v) => s + v.availableStock * v.price!, 0)
+      : null;
+
   return {
     availableRollup: variants.reduce((s, v) => s + v.availableStock, 0),
     reservedRollup: variants.reduce((s, v) => s + v.reservedStock, 0),
     committedRollup: variants.reduce((s, v) => s + v.committedStock, 0),
     costRollup,
     avgCostRollup,
+    priceRollup,
   };
 }
 

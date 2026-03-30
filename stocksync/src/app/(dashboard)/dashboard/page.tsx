@@ -105,6 +105,12 @@ export default async function DashboardPage({
     const avgCostRollup =
       costRollup != null && totalQtyWithCost > 0 ? costRollup / totalQtyWithCost : null;
 
+    const withPrice = p.variants.filter((v) => v.price != null);
+    const priceRollup =
+      withPrice.length > 0
+        ? withPrice.reduce((s, v) => s + v.availableStock * v.price!, 0)
+        : null;
+
     return {
       ...p,
       availableRollup: p.variants.reduce((s, v) => s + v.availableStock, 0),
@@ -112,6 +118,7 @@ export default async function DashboardPage({
       committedRollup: p.variants.reduce((s, v) => s + v.committedStock, 0),
       costRollup,
       avgCostRollup,
+      priceRollup,
     };
   });
 
@@ -179,10 +186,13 @@ export default async function DashboardPage({
     _count: { id: true },
   });
 
-  // Total inventory value (only variants with averageCost)
-  const [{ total: totalInventoryValue }] = await prisma.$queryRaw<
-    [{ total: number | null }]
-  >`SELECT SUM("availableStock" * "averageCost") as total FROM "Variant" WHERE "storeId" = ${store.id} AND "averageCost" IS NOT NULL`;
+  // Total inventory cost (sum of cost × qty) and retail value (sum of price × qty)
+  const [{ cost: totalCostValue, retail: totalRetailValue }] = await prisma.$queryRaw<
+    [{ cost: number | null; retail: number | null }]
+  >`SELECT
+      SUM(CASE WHEN "averageCost" IS NOT NULL THEN "availableStock" * "averageCost" END) as cost,
+      SUM(CASE WHEN "price" IS NOT NULL THEN "availableStock" * "price" END) as retail
+    FROM "Variant" WHERE "storeId" = ${store.id}`;
 
   // Collection header label
   const collectionLabel =
@@ -211,7 +221,7 @@ export default async function DashboardPage({
       <ReorderAlertBanner critical={urgencyCritical} />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Produtos</CardTitle>
@@ -252,17 +262,35 @@ export default async function DashboardPage({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground text-emerald-600 dark:text-emerald-400">
-              Valor em Estoque
+            <CardTitle className="text-sm font-medium text-muted-foreground text-blue-600 dark:text-blue-400">
+              Custo do Estoque
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {totalInventoryValue != null ? (
-              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                {formatBRL(totalInventoryValue)}
+            {totalCostValue != null ? (
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {formatBRL(totalCostValue)}
               </p>
             ) : (
-              <p className="text-3xl font-bold text-muted-foreground" title="Importe uma planilha para calcular custos">
+              <p className="text-2xl font-bold text-muted-foreground" title="Sincronize a loja para puxar custos">
+                —
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground text-emerald-600 dark:text-emerald-400">
+              Valor do Estoque
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {totalRetailValue != null ? (
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {formatBRL(totalRetailValue)}
+              </p>
+            ) : (
+              <p className="text-2xl font-bold text-muted-foreground" title="Sincronize a loja para puxar preços">
                 —
               </p>
             )}

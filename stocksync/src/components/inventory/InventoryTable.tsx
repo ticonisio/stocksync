@@ -102,8 +102,10 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
               <TableHead className="text-right">Disponível</TableHead>
               <TableHead className="text-right">Reservado</TableHead>
               <TableHead className="text-right">Comprometido</TableHead>
-              <TableHead className="text-right">Custo Médio</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
+              <TableHead className="text-right">Custo Un.</TableHead>
+              <TableHead className="text-right">Preço Venda</TableHead>
+              <TableHead className="text-right">Custo Total</TableHead>
+              <TableHead className="text-right">Valor Venda</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -152,8 +154,14 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                     <TableCell className="text-right py-3 font-mono text-sm text-foreground">
                       {formatBRL(product.avgCostRollup)}
                     </TableCell>
-                    <TableCell className="text-right py-3 font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                    <TableCell className="text-right py-3 font-mono text-sm text-foreground">
+                      {product.variants.length === 1 ? formatBRL(product.variants[0].price) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right py-3 font-mono text-sm text-blue-600 dark:text-blue-400">
                       {formatBRL(product.costRollup)}
+                    </TableCell>
+                    <TableCell className="text-right py-3 font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                      {formatBRL(product.priceRollup)}
                     </TableCell>
                   </TableRow>
 
@@ -182,10 +190,20 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                         <TableCell className="text-right py-2 font-mono text-sm text-foreground">
                           {formatBRL(variant.averageCost)}
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                        <TableCell className="text-right py-2 font-mono text-sm text-foreground">
+                          {formatBRL(variant.price)}
+                        </TableCell>
+                        <TableCell className="text-right py-2 font-mono text-sm text-blue-600 dark:text-blue-400">
                           {formatBRL(
                             variant.averageCost != null
                               ? variant.availableStock * variant.averageCost
+                              : null
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right py-2 font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                          {formatBRL(
+                            variant.price != null
+                              ? variant.availableStock * variant.price
                               : null
                           )}
                         </TableCell>

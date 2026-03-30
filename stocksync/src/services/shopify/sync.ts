@@ -165,6 +165,7 @@ async function upsertProductsPage(storeId: string, domain: string, token: string
     if (!productId) return [];
     return p.variants.map((v) => {
       const cost = costMap.get(v.inventory_item_id) ?? null;
+      const price = v.price ? parseFloat(v.price) : null;
       return prisma.variant.upsert({
         where: { storeId_shopifyVariantId: { storeId, shopifyVariantId: String(v.id) } },
         update: {
@@ -172,6 +173,7 @@ async function upsertProductsPage(storeId: string, domain: string, token: string
           sku: v.sku ?? null,
           availableStock: v.inventory_quantity,
           averageCost: cost,
+          price: price !== null && !isNaN(price) ? price : null,
         },
         create: {
           storeId,
@@ -181,6 +183,7 @@ async function upsertProductsPage(storeId: string, domain: string, token: string
           sku: v.sku ?? null,
           availableStock: v.inventory_quantity,
           averageCost: cost,
+          price: price !== null && !isNaN(price) ? price : null,
         },
       });
     });
