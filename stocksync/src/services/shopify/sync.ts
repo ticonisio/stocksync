@@ -309,8 +309,9 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
   const domain = store.shopifyDomain;
 
   try {
-    // First batch: validate token, fetch total count, and reset state
-    if (!store.syncCursor && store.syncStatus !== 'SYNCING') {
+    // First batch or re-sync: validate token, fetch total count, and reset state
+    const isResync = !store.syncCursor && store.syncStatus !== 'SYNCING';
+    if (isResync) {
       await validateToken(domain, accessToken);
       const productCount = await fetchProductCount(domain, accessToken);
       await prisma.store.update({
@@ -318,6 +319,7 @@ export async function syncStoreBatch(storeId: string): Promise<SyncBatchResult> 
         data: { syncStatus: 'SYNCING', syncDone: 0, syncTotal: productCount, syncError: null, syncCursor: null },
       });
       store.syncTotal = productCount;
+      store.syncDone = 0;
     }
 
     let cursor: string | undefined = store.syncCursor ?? undefined;
