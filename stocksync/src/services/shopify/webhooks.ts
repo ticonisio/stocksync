@@ -2,7 +2,13 @@ import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
 
 const SHOPIFY_API_VERSION = '2026-01';
-const WEBHOOK_TOPICS = ['orders/paid', 'orders/cancelled', 'orders/refunded'] as const;
+const WEBHOOK_TOPICS = [
+  'orders/paid',
+  'orders/cancelled',
+  'orders/refunded',
+  'products/update',
+  'products/create',
+] as const;
 
 export async function registerWebhooks(storeId: string): Promise<void> {
   try {
