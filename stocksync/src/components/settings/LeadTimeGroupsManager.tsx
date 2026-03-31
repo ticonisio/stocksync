@@ -163,7 +163,7 @@ interface ProductAssignment {
 
 function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) {
   const { data: inventoryData } = useSWR<{ products: Product[] }>(
-    open ? '/api/inventory?limit=100' : null,
+    open ? '/api/inventory?limit=9999' : null,
     fetcher
   );
   const { data: groupData } = useSWR<{ group: { products: { productId: string }[] } }>(
@@ -176,6 +176,7 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
 
   const [selected, setSelected] = useState<Map<string, ProductAssignment>>(() => new Map());
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
   // Initialize selections from loaded data
   const initializedRef = { current: false };
@@ -189,6 +190,11 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
     setSelected(init);
     initializedRef.current = true;
   }
+
+  // Filter products by search
+  const filteredProducts = search.trim()
+    ? allProducts.filter((p) => p.title.toLowerCase().includes(search.toLowerCase()))
+    : allProducts;
 
   function toggleProduct(product: Product) {
     setSelected((prev) => {
@@ -204,6 +210,30 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
       return next;
     });
   }
+
+  function selectAll() {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      for (const p of filteredProducts) {
+        if (!next.has(p.id)) {
+          next.set(p.id, { productId: p.id, leadTimeOverride: p.leadTimeOverride });
+        }
+      }
+      return next;
+    });
+  }
+
+  function deselectAll() {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      for (const p of filteredProducts) {
+        next.delete(p.id);
+      }
+      return next;
+    });
+  }
+
+  const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.id));
 
   function setOverride(productId: string, value: string) {
     setSelected((prev) => {
@@ -244,11 +274,36 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
         <DialogHeader>
           <DialogTitle>Gerenciar Produtos — {group.name}</DialogTitle>
         </DialogHeader>
+        {/* Search + Select All */}
+        <div className="space-y-2">
+          <Input
+            placeholder="Buscar produto por nome..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="text-foreground"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {selected.size} de {allProducts.length} selecionado{selected.size !== 1 ? 's' : ''}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-7"
+              onClick={allFilteredSelected ? deselectAll : selectAll}
+            >
+              {allFilteredSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+              {search.trim() ? ' (filtrados)' : ''}
+            </Button>
+          </div>
+        </div>
         <div className="max-h-80 overflow-y-auto space-y-2 py-2">
           {allProducts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum produto disponível.</p>
+            <p className="text-sm text-muted-foreground">Carregando produtos...</p>
+          ) : filteredProducts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum produto encontrado para &quot;{search}&quot;.</p>
           ) : (
-            allProducts.map((product) => {
+            filteredProducts.map((product) => {
               const isChecked = selected.has(product.id);
               const assignment = selected.get(product.id);
               return (
@@ -260,7 +315,7 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
                   />
                   <label
                     htmlFor={`prod-${product.id}`}
-                    className="flex-1 text-sm cursor-pointer truncate"
+                    className="flex-1 text-sm cursor-pointer truncate text-foreground"
                   >
                     {product.title}
                   </label>
@@ -338,7 +393,7 @@ export function LeadTimeGroupsManager() {
                 className="flex items-center justify-between rounded-lg border p-3"
               >
                 <div className="space-y-1 min-w-0">
-                  <p className="font-medium text-sm">{group.name}</p>
+                  <p className="font-medium text-sm text-foreground">{group.name}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className="text-xs">
                       {group.leadTimeDays} dias

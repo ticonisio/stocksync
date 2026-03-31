@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { AuthSessionProvider } from '@/components/providers/session-provider';
-import { Sidebar } from '@/components/layout/sidebar';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { getUrgencyItems } from '@/services/inventory/urgency-service';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {

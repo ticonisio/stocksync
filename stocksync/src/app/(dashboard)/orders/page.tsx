@@ -79,7 +79,16 @@ export default async function OrdersPage({
         <OrderFilters />
       </Suspense>
 
-      <OrdersRealtimeWrapper storeId={store.id} initialOrders={orders} total={total} page={page} />
+      <OrdersRealtimeWrapper
+        storeId={store.id}
+        initialOrders={orders.map((o) => ({
+          ...o,
+          status: o.status as string,
+          createdAt: o.createdAt.toISOString(),
+        }))}
+        total={total}
+        page={page}
+      />
     </div>
   );
 }

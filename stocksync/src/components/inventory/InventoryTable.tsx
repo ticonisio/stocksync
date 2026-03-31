@@ -142,7 +142,7 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                         {product.variants.length} variante{product.variants.length !== 1 ? 's' : ''}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right py-3 font-mono text-sm">
+                    <TableCell className="text-right py-3 font-mono text-sm text-foreground">
                       {product.availableRollup}
                     </TableCell>
                     <TableCell className="text-right py-3 font-mono text-sm text-amber-600 dark:text-amber-400">
@@ -173,12 +173,12 @@ export function InventoryTable({ products: ssrProducts, total: ssrTotal, page, p
                       >
                         <TableCell className="py-2" />
                         <TableCell className="py-2 pl-8">
-                          <div className="text-sm">{variant.title}</div>
+                          <div className="text-sm text-foreground">{variant.title}</div>
                           <div className="text-xs text-muted-foreground">
                             SKU: {variant.sku ?? '—'}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right py-2 font-mono text-sm">
+                        <TableCell className="text-right py-2 font-mono text-sm text-foreground">
                           {variant.availableStock}
                         </TableCell>
                         <TableCell className="text-right py-2 font-mono text-sm text-amber-600 dark:text-amber-400">
