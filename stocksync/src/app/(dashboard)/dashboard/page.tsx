@@ -4,13 +4,12 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InventoryTable } from '@/components/inventory/InventoryTable';
 import { InventoryFilters } from '@/components/inventory/InventoryFilters';
 import { getUrgencyItems } from '@/services/inventory/urgency-service';
 import { UrgencyDashboardCards } from '@/components/dashboard/UrgencyDashboardCards';
 import { ReorderAlertBanner } from '@/components/dashboard/ReorderAlertBanner';
-import { formatBRL } from '@/lib/format';
+import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -220,83 +219,17 @@ export default async function DashboardPage({
       {/* Reorder alert banner */}
       <ReorderAlertBanner critical={urgencyCritical} />
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Produtos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-foreground">{total}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Variantes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-foreground">{allStats._count.id}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Disponível</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-foreground">
-              {allStats._sum.availableStock ?? 0}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground text-amber-600 dark:text-amber-400">
-              Reservado
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-              {allStats._sum.reservedStock ?? 0}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground text-blue-600 dark:text-blue-400">
-              Custo do Estoque
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {totalCostValue != null ? (
-              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {formatBRL(totalCostValue)}
-              </p>
-            ) : (
-              <p className="text-2xl font-bold text-muted-foreground" title="Sincronize a loja para puxar custos">
-                —
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground text-emerald-600 dark:text-emerald-400">
-              Valor do Estoque
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {totalRetailValue != null ? (
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                {formatBRL(totalRetailValue)}
-              </p>
-            ) : (
-              <p className="text-2xl font-bold text-muted-foreground" title="Sincronize a loja para puxar preços">
-                —
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Summary cards — reactive via Zustand (recalculate on realtime stock changes) */}
+      <DashboardSummaryCards
+        initial={{
+          totalProducts: total,
+          totalVariants: allStats._count.id,
+          availableStock: allStats._sum.availableStock ?? 0,
+          reservedStock: allStats._sum.reservedStock ?? 0,
+          totalCostValue: totalCostValue ?? null,
+          totalRetailValue: totalRetailValue ?? null,
+        }}
+      />
 
       {/* Urgency cards */}
       <Suspense fallback={null}>

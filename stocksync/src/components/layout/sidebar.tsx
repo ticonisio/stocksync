@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { LayoutGrid, TrendingUp, Clock, Settings, LogOut, FileSpreadsheet } from 'lucide-react';
+import { LayoutGrid, TrendingUp, Clock, Settings, LogOut, FileSpreadsheet, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CollectionsSidebar } from '@/components/inventory/CollectionsSidebar';
 
@@ -13,14 +13,16 @@ const navItems = [
   { href: '/insights', label: 'Insights', icon: TrendingUp },
   { href: '/lead-time', label: 'Tempo de Entrega', icon: Clock },
   { href: '/imports', label: 'Importações', icon: FileSpreadsheet },
+  { href: '/orders', label: 'Pedidos', icon: ShoppingCart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
 interface SidebarProps {
   criticalCount?: number;
+  recentOrdersCount?: number;
 }
 
-export function Sidebar({ criticalCount = 0 }: SidebarProps) {
+export function Sidebar({ criticalCount = 0, recentOrdersCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
 
@@ -53,6 +55,11 @@ export function Sidebar({ criticalCount = 0 }: SidebarProps) {
                 {item.href === '/lead-time' && criticalCount > 0 && (
                   <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-auto">
                     {criticalCount}
+                  </span>
+                )}
+                {item.href === '/orders' && recentOrdersCount > 0 && (
+                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-auto">
+                    {recentOrdersCount}
                   </span>
                 )}
               </Button>

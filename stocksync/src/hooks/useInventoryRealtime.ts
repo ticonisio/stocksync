@@ -42,11 +42,15 @@ export function useInventoryRealtime(storeId: string) {
             availableStock: number;
             reservedStock: number;
             committedStock: number;
+            averageCost: number | null;
+            price: number | null;
           };
           updateVariant(v.id, {
             availableStock: v.availableStock,
             reservedStock: v.reservedStock,
             committedStock: v.committedStock,
+            averageCost: v.averageCost,
+            price: v.price,
           });
           markUpdated(v.id);
           const tid = setTimeout(() => {

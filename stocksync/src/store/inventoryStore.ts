@@ -23,7 +23,7 @@ export interface ProductWithRollup {
   priceRollup: number | null;
 }
 
-type VariantPatch = Partial<Pick<VariantWithStock, 'availableStock' | 'reservedStock' | 'committedStock'>>;
+type VariantPatch = Partial<Pick<VariantWithStock, 'availableStock' | 'reservedStock' | 'committedStock' | 'averageCost' | 'price'>>;
 
 interface InventoryState {
   products: ProductWithRollup[];
