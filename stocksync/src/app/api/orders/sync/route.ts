@@ -58,14 +58,27 @@ export async function POST() {
       const limit = 250;
 
       try {
-        // Phase 1: Import orders
-        send({ phase: 'orders', message: 'Buscando pedidos da Shopify...', imported: 0 });
+        // Phase 1: Import orders (incremental if lastOrderSyncAt exists)
+        const isIncremental = !!store.lastOrderSyncAt;
+        send({
+          phase: 'orders',
+          message: isIncremental
+            ? 'Buscando novos pedidos da Shopify...'
+            : 'Buscando todos os pedidos da Shopify...',
+          imported: 0,
+        });
 
         do {
           pageNum++;
-          const url: string = pageInfo
-            ? `https://${store.shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${limit}&page_info=${pageInfo}`
-            : `https://${store.shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${limit}&status=any`;
+          let url: string;
+          if (pageInfo) {
+            url = `https://${store.shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${limit}&page_info=${pageInfo}`;
+          } else {
+            const base = `https://${store.shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${limit}&status=any`;
+            url = store.lastOrderSyncAt
+              ? `${base}&created_at_min=${store.lastOrderSyncAt.toISOString()}`
+              : base;
+          }
 
           const res: Response = await fetch(url, {
             headers: { 'X-Shopify-Access-Token': token },
@@ -166,6 +179,12 @@ export async function POST() {
           phase: 'velocity',
           message: 'Velocity calculada com sucesso',
           done: true,
+        });
+
+        // Update lastOrderSyncAt for incremental sync next time
+        await prisma.store.update({
+          where: { id: store.id },
+          data: { lastOrderSyncAt: new Date() },
         });
 
         // Done

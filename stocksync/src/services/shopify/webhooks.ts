@@ -3,6 +3,7 @@ import { decrypt } from '@/lib/encrypt';
 
 const SHOPIFY_API_VERSION = '2026-01';
 const WEBHOOK_TOPICS = [
+  'orders/create',
   'orders/paid',
   'orders/cancelled',
   'orders/refunded',

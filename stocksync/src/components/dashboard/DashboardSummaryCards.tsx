@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useInventoryStore } from '@/store/inventoryStore';
 import { formatBRL } from '@/lib/format';
@@ -18,51 +17,16 @@ interface DashboardSummaryCardsProps {
 }
 
 export function DashboardSummaryCards({ initial }: DashboardSummaryCardsProps) {
-  const products = useInventoryStore((s) => s.products);
-  const storeTotal = useInventoryStore((s) => s.total);
+  const deltas = useInventoryStore((s) => s.deltas);
 
-  // Recalculate aggregates from Zustand only when the store holds ALL products.
-  // The InventoryTable only loads one page (e.g. 25 products), so partial data
-  // would produce incorrect totals. Cost/value always use SSR values (SQL-based).
-  const live = useMemo(() => {
-    // Only recalculate stock counts from Zustand when we have all products
-    if (products.length === 0 || products.length < storeTotal) return null;
-
-    let available = 0;
-    let reserved = 0;
-    let costSum = 0;
-    let hasCost = false;
-    let retailSum = 0;
-    let hasRetail = false;
-
-    for (const p of products) {
-      for (const v of p.variants) {
-        available += v.availableStock;
-        reserved += v.reservedStock;
-        if (v.averageCost != null) {
-          costSum += v.availableStock * v.averageCost;
-          hasCost = true;
-        }
-        if (v.price != null) {
-          retailSum += v.availableStock * v.price;
-          hasRetail = true;
-        }
-      }
-    }
-
-    return {
-      availableStock: available,
-      reservedStock: reserved,
-      totalCostValue: hasCost ? costSum : null,
-      totalRetailValue: hasRetail ? retailSum : null,
-    };
-  }, [products, storeTotal]);
-
-  // Use live values only when complete, otherwise SSR initial values
-  const availableStock = live?.availableStock ?? initial.availableStock;
-  const reservedStock = live?.reservedStock ?? initial.reservedStock;
-  const totalCostValue = live ? live.totalCostValue : initial.totalCostValue;
-  const totalRetailValue = live ? live.totalRetailValue : initial.totalRetailValue;
+  // Apply incremental deltas from realtime events over SSR initial values.
+  // This works regardless of pagination — deltas track every variant update.
+  const availableStock = initial.availableStock + deltas.availableDelta;
+  const reservedStock = initial.reservedStock + deltas.reservedDelta;
+  const totalCostValue =
+    initial.totalCostValue != null ? initial.totalCostValue + deltas.costDelta : null;
+  const totalRetailValue =
+    initial.totalRetailValue != null ? initial.totalRetailValue + deltas.retailDelta : null;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">

@@ -33,7 +33,7 @@ export async function calculateAndSaveVelocity(
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    // Count all non-cancelled orders (PAID, PENDING, REFUNDED all represent real sales)
+    // Count only PAID orders — FR16: velocity "baseada em pedidos pagos"
     const rows = await prisma.$queryRaw<
       Array<{ variantId: string; unitsSold: bigint }>
     >`
@@ -41,7 +41,7 @@ export async function calculateAndSaveVelocity(
       FROM "OrderItem" oi
       JOIN "Order" o ON o."id" = oi."orderId"
       WHERE o."storeId" = ${storeId}
-        AND o."status" != 'CANCELLED'
+        AND o."status" NOT IN ('CANCELLED', 'REFUNDED')
         AND o."createdAt" >= ${since}
       GROUP BY oi."variantId"
     `;
@@ -87,7 +87,7 @@ async function calculateForVariants(storeId: string, variantIds: string[]): Prom
       const result = await prisma.orderItem.aggregate({
         where: {
           variantId,
-          order: { storeId, status: { not: 'CANCELLED' }, createdAt: { gte: since } },
+          order: { storeId, status: { notIn: ['CANCELLED', 'REFUNDED'] }, createdAt: { gte: since } },
         },
         _sum: { quantity: true },
       });

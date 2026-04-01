@@ -75,6 +75,7 @@ model Store {
   syncDone             Int?
   syncCursor           String?
   lastSyncedAt         DateTime?
+  lastOrderSyncAt      DateTime?
   user                 User            @relation(fields: [userId], references: [id])
   products             Product[]
   collections          Collection[]

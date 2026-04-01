@@ -25,12 +25,23 @@ export interface ProductWithRollup {
 
 type VariantPatch = Partial<Pick<VariantWithStock, 'availableStock' | 'reservedStock' | 'committedStock' | 'averageCost' | 'price'>>;
 
+/** Incremental deltas applied over SSR initial values — works regardless of pagination */
+export interface SummaryDeltas {
+  availableDelta: number;
+  reservedDelta: number;
+  costDelta: number;
+  retailDelta: number;
+}
+
 interface InventoryState {
   products: ProductWithRollup[];
   total: number;
   updatedVariantIds: Set<string>;
+  deltas: SummaryDeltas;
   setProducts: (products: ProductWithRollup[], total: number) => void;
   updateVariant: (variantId: string, patch: VariantPatch) => void;
+  /** Apply raw deltas for variants NOT in the current page (e.g. from realtime old→new diff) */
+  applyDelta: (delta: Partial<SummaryDeltas>) => void;
   markUpdated: (variantId: string) => void;
   clearUpdated: (variantId: string) => void;
 }
@@ -65,17 +76,64 @@ export const useInventoryStore = create<InventoryState>((set) => ({
   products: [],
   total: 0,
   updatedVariantIds: new Set(),
+  deltas: { availableDelta: 0, reservedDelta: 0, costDelta: 0, retailDelta: 0 },
 
   setProducts: (products, total) => set({ products, total }),
 
   updateVariant: (variantId, patch) =>
-    set((state) => ({
-      products: state.products.map((p) => {
-        const variants = p.variants.map((v) =>
-          v.id === variantId ? { ...v, ...patch } : v
-        );
+    set((state) => {
+      // Calculate deltas from the old variant values
+      let dAvailable = 0;
+      let dReserved = 0;
+      let dCost = 0;
+      let dRetail = 0;
+
+      const products = state.products.map((p) => {
+        const variants = p.variants.map((v) => {
+          if (v.id !== variantId) return v;
+
+          const oldAvail = v.availableStock;
+          const newAvail = patch.availableStock ?? oldAvail;
+          dAvailable += newAvail - oldAvail;
+
+          const oldReserved = v.reservedStock;
+          const newReserved = patch.reservedStock ?? oldReserved;
+          dReserved += newReserved - oldReserved;
+
+          const oldCost = (v.averageCost ?? 0) * oldAvail;
+          const newCostUnit = patch.averageCost !== undefined ? patch.averageCost : v.averageCost;
+          const newCost = (newCostUnit ?? 0) * newAvail;
+          dCost += newCost - oldCost;
+
+          const oldRetail = (v.price ?? 0) * oldAvail;
+          const newPriceUnit = patch.price !== undefined ? patch.price : v.price;
+          const newRetail = (newPriceUnit ?? 0) * newAvail;
+          dRetail += newRetail - oldRetail;
+
+          return { ...v, ...patch };
+        });
         return { ...p, variants, ...calcRollup(variants) };
-      }),
+      });
+
+      return {
+        products,
+        deltas: {
+          availableDelta: state.deltas.availableDelta + dAvailable,
+          reservedDelta: state.deltas.reservedDelta + dReserved,
+          costDelta: state.deltas.costDelta + dCost,
+          retailDelta: state.deltas.retailDelta + dRetail,
+        },
+      };
+    }),
+
+  applyDelta: (delta) =>
+    set((state) => ({
+      deltas: {
+        availableDelta: state.deltas.availableDelta + (delta.availableDelta ?? 0),
+        reservedDelta: state.deltas.reservedDelta + (delta.reservedDelta ?? 0),
+        costDelta: state.deltas.costDelta + (delta.costDelta ?? 0),
+        retailDelta: state.deltas.retailDelta + (delta.retailDelta ?? 0),
+      },
     })),
 
   markUpdated: (variantId) =>

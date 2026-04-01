@@ -30,8 +30,54 @@ interface ShopifyOrderPayload {
 
 // ── Order processors ────────────────────────────────────────────────────────
 
+/** orders/create — FR8: pedido pendente → reservedStock incrementado */
+async function processOrderCreate(storeId: string, payload: ShopifyOrderPayload): Promise<void> {
+  const shopifyOrderId = String(payload.id);
+
+  const order = await prisma.order.upsert({
+    where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
+    update: {},
+    create: { storeId, shopifyOrderId, status: 'PENDING' },
+  });
+
+  // Only process if newly created as PENDING (not if already exists as PAID)
+  if (order.status !== 'PENDING') return;
+
+  for (const item of payload.line_items) {
+    const variant = await prisma.variant.findUnique({
+      where: {
+        storeId_shopifyVariantId: { storeId, shopifyVariantId: String(item.variant_id) },
+      },
+    });
+    if (!variant) continue;
+
+    const existingItem = await prisma.orderItem.findFirst({
+      where: { orderId: order.id, variantId: variant.id },
+    });
+    if (!existingItem) {
+      await prisma.orderItem.create({
+        data: { orderId: order.id, variantId: variant.id, quantity: item.quantity },
+      });
+    }
+
+    // FR8: Mark as reserved — does NOT decrement available yet
+    await prisma.$executeRaw`
+      UPDATE "Variant"
+      SET "reservedStock" = "reservedStock" + ${item.quantity}
+      WHERE "id" = ${variant.id}
+    `;
+  }
+}
+
+/** orders/paid — FR7: decrementa available. Se PENDING→PAID, também libera reserved (Story 2.4 AC2) */
 async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): Promise<void> {
   const shopifyOrderId = String(payload.id);
+
+  // Check if order already exists as PENDING (came through orders/create first)
+  const existingOrder = await prisma.order.findUnique({
+    where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
+  });
+  const wasPending = existingOrder?.status === 'PENDING';
 
   const order = await prisma.order.upsert({
     where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
@@ -45,7 +91,7 @@ async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): 
         storeId_shopifyVariantId: { storeId, shopifyVariantId: String(item.variant_id) },
       },
     });
-    if (!variant) continue; // AC 8: skip variants not in DB
+    if (!variant) continue;
 
     const existingItem = await prisma.orderItem.findFirst({
       where: { orderId: order.id, variantId: variant.id },
@@ -56,19 +102,29 @@ async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): 
       });
     }
 
-    // Atomic decrement to avoid race conditions between concurrent webhooks
-    await prisma.$executeRaw`
-      UPDATE "Variant"
-      SET "availableStock" = GREATEST(0, "availableStock" - ${item.quantity})
-      WHERE "id" = ${variant.id}
-    `;
+    if (wasPending) {
+      // PENDING→PAID: move from reserved to committed, decrement available
+      await prisma.$executeRaw`
+        UPDATE "Variant"
+        SET "availableStock" = GREATEST(0, "availableStock" - ${item.quantity}),
+            "reservedStock" = GREATEST(0, "reservedStock" - ${item.quantity})
+        WHERE "id" = ${variant.id}
+      `;
+    } else {
+      // Direct PAID (no prior orders/create): just decrement available
+      await prisma.$executeRaw`
+        UPDATE "Variant"
+        SET "availableStock" = GREATEST(0, "availableStock" - ${item.quantity})
+        WHERE "id" = ${variant.id}
+      `;
+    }
   }
 }
 
 async function processOrderCancelled(
   storeId: string,
   payload: ShopifyOrderPayload,
-  status: 'CANCELLED' | 'REFUNDED'
+  newStatus: 'CANCELLED' | 'REFUNDED'
 ): Promise<void> {
   const shopifyOrderId = String(payload.id);
 
@@ -76,15 +132,27 @@ async function processOrderCancelled(
     where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
     include: { items: true },
   });
-  if (!order) return; // order not in DB — skip
+  if (!order) return;
 
-  await prisma.order.update({ where: { id: order.id }, data: { status } });
+  const wasPending = order.status === 'PENDING';
+
+  await prisma.order.update({ where: { id: order.id }, data: { status: newStatus } });
 
   for (const item of order.items) {
-    await prisma.variant.update({
-      where: { id: item.variantId },
-      data: { availableStock: { increment: item.quantity } },
-    });
+    if (wasPending) {
+      // FR9: PENDING cancelled → release reserved (not available)
+      await prisma.$executeRaw`
+        UPDATE "Variant"
+        SET "reservedStock" = GREATEST(0, "reservedStock" - ${item.quantity})
+        WHERE "id" = ${item.variantId}
+      `;
+    } else {
+      // FR9/FR10: PAID cancelled/refunded → restore available
+      await prisma.variant.update({
+        where: { id: item.variantId },
+        data: { availableStock: { increment: item.quantity } },
+      });
+    }
   }
 }
 
@@ -258,7 +326,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // Process by topic
-  if (topic === 'orders/paid') {
+  if (topic === 'orders/create') {
+    await processOrderCreate(store.id, rawPayload as ShopifyOrderPayload);
+  } else if (topic === 'orders/paid') {
     const payload = rawPayload as ShopifyOrderPayload;
     await processOrderPaid(store.id, payload);
 
@@ -278,8 +348,40 @@ export async function POST(req: Request): Promise<Response> {
     }
   } else if (topic === 'orders/cancelled') {
     await processOrderCancelled(store.id, rawPayload as ShopifyOrderPayload, 'CANCELLED');
+
+    // Recalcular velocity — cancel remove a venda do dataset (FR16)
+    try {
+      const payload = rawPayload as ShopifyOrderPayload;
+      const shopifyVariantIds = payload.line_items.map((i) => String(i.variant_id));
+      const affectedVariants = await prisma.variant.findMany({
+        where: { storeId: store.id, shopifyVariantId: { in: shopifyVariantIds } },
+        select: { id: true },
+      });
+      const internalIds = affectedVariants.map((v) => v.id);
+      if (internalIds.length > 0) {
+        await calculateAndSaveVelocity(store.id, internalIds);
+      }
+    } catch (err) {
+      console.error('[webhook] velocity recalculation after cancel failed:', err);
+    }
   } else if (topic === 'orders/refunded') {
     await processOrderCancelled(store.id, rawPayload as ShopifyOrderPayload, 'REFUNDED');
+
+    // Recalcular velocity — refund remove a venda do dataset (FR16)
+    try {
+      const payload = rawPayload as ShopifyOrderPayload;
+      const shopifyVariantIds = payload.line_items.map((i) => String(i.variant_id));
+      const affectedVariants = await prisma.variant.findMany({
+        where: { storeId: store.id, shopifyVariantId: { in: shopifyVariantIds } },
+        select: { id: true },
+      });
+      const internalIds = affectedVariants.map((v) => v.id);
+      if (internalIds.length > 0) {
+        await calculateAndSaveVelocity(store.id, internalIds);
+      }
+    } catch (err) {
+      console.error('[webhook] velocity recalculation after refund failed:', err);
+    }
   } else if (isProductTopic) {
     await processProductUpdate(store.id, rawPayload as ShopifyProductPayload);
   }
