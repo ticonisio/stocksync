@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
+import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity';
 
 const SHOPIFY_API_VERSION = '2026-01';
 
@@ -124,6 +125,13 @@ export async function POST() {
       }
     }
   } while (pageInfo);
+
+  // Recalculate velocity for all variants using historical order data
+  try {
+    await calculateAndSaveVelocity(store.id);
+  } catch (err) {
+    console.error('[orders/sync] velocity recalculation failed:', err);
+  }
 
   return NextResponse.json({ imported, skipped });
 }

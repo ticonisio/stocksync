@@ -15,33 +15,71 @@ const PERIOD_DAYS: Record<string, number> = {
  *
  * @param storeId   - ID da store a processar
  * @param variantIds - IDs internos das variantes a recalcular.
- *                     Se omitido, recalcula TODAS as variantes da store.
+ *                     Se omitido, recalcula TODAS as variantes da store (batch SQL).
  */
 export async function calculateAndSaveVelocity(
   storeId: string,
   variantIds?: string[]
 ): Promise<void> {
-  const variants = await prisma.variant.findMany({
-    where: {
-      storeId,
-      ...(variantIds ? { id: { in: variantIds } } : {}),
-    },
-    select: { id: true },
-  });
+  // When recalculating specific variants (webhook), use per-variant queries
+  if (variantIds && variantIds.length > 0) {
+    await calculateForVariants(storeId, variantIds);
+    return;
+  }
 
-  for (const variant of variants) {
+  // Batch mode: one SQL query per period for ALL variants in the store
+  for (const [period, days] of Object.entries(PERIOD_DAYS)) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const rows = await prisma.$queryRaw<
+      Array<{ variantId: string; unitsSold: bigint }>
+    >`
+      SELECT oi."variantId", COALESCE(SUM(oi."quantity"), 0) as "unitsSold"
+      FROM "OrderItem" oi
+      JOIN "Order" o ON o."id" = oi."orderId"
+      WHERE o."storeId" = ${storeId}
+        AND o."status" = 'PAID'
+        AND o."createdAt" >= ${since}
+      GROUP BY oi."variantId"
+    `;
+
+    const soldMap = new Map<string, number>();
+    for (const row of rows) {
+      soldMap.set(row.variantId, Number(row.unitsSold));
+    }
+
+    // Get all variants for this store
+    const allVariants = await prisma.variant.findMany({
+      where: { storeId },
+      select: { id: true },
+    });
+
+    // Batch upsert all velocities
+    for (const variant of allVariants) {
+      const unitsSold = soldMap.get(variant.id) ?? 0;
+      const velocityPerDay = unitsSold / days;
+
+      await prisma.salesVelocity.upsert({
+        where: { variantId_period: { variantId: variant.id, period } },
+        update: { unitsSold, velocityPerDay, calculatedAt: new Date() },
+        create: { variantId: variant.id, storeId, period, unitsSold, velocityPerDay },
+      });
+    }
+  }
+}
+
+/** Per-variant calculation (used by webhooks for a few variants) */
+async function calculateForVariants(storeId: string, variantIds: string[]): Promise<void> {
+  for (const variantId of variantIds) {
     for (const [period, days] of Object.entries(PERIOD_DAYS)) {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
       const result = await prisma.orderItem.aggregate({
         where: {
-          variantId: variant.id,
-          order: {
-            storeId,
-            status: 'PAID',
-            createdAt: { gte: since },
-          },
+          variantId,
+          order: { storeId, status: 'PAID', createdAt: { gte: since } },
         },
         _sum: { quantity: true },
       });
@@ -50,9 +88,9 @@ export async function calculateAndSaveVelocity(
       const velocityPerDay = unitsSold / days;
 
       await prisma.salesVelocity.upsert({
-        where: { variantId_period: { variantId: variant.id, period } },
+        where: { variantId_period: { variantId, period } },
         update: { unitsSold, velocityPerDay, calculatedAt: new Date() },
-        create: { variantId: variant.id, storeId, period, unitsSold, velocityPerDay },
+        create: { variantId, storeId, period, unitsSold, velocityPerDay },
       });
     }
   }
