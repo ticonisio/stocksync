@@ -78,7 +78,7 @@ export function OrdersTable({ orders, total, page, perPage, highlightedIds }: Or
           {orders.map((order) => {
             const isExpanded = expandedIds.has(order.id);
             const isHighlighted = highlightedIds?.has(order.id);
-            const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+            const totalItems = order.items.length;
             const productNames = [
               ...new Set(order.items.map((item) => item.variant.product.title)),
             ];

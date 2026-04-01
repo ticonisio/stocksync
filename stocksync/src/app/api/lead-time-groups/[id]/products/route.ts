@@ -70,12 +70,24 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       });
     }
 
-    // Step 4: Update leadTimeOverride for each product
-    for (const p of products) {
-      const overrideValue = p.leadTimeOverride ?? null;
-      await tx.product.update({
-        where: { id: p.productId },
-        data: { leadTimeOverride: overrideValue },
+    // Step 4: Batch-update leadTimeOverride (only for products that have one set)
+    const withOverride = products.filter((p) => p.leadTimeOverride != null);
+    if (withOverride.length > 0) {
+      for (const p of withOverride) {
+        await tx.product.update({
+          where: { id: p.productId },
+          data: { leadTimeOverride: p.leadTimeOverride },
+        });
+      }
+    }
+    // Clear override for products without one (batch)
+    const withoutOverrideIds = products
+      .filter((p) => p.leadTimeOverride == null)
+      .map((p) => p.productId);
+    if (withoutOverrideIds.length > 0) {
+      await tx.product.updateMany({
+        where: { id: { in: withoutOverrideIds } },
+        data: { leadTimeOverride: null },
       });
     }
   });
