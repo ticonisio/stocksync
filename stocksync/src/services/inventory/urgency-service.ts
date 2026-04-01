@@ -79,15 +79,29 @@ export async function getUrgencyItems(
       }
     }
 
-    // Skip products with no velocity
-    if (velocityPerDay === 0) continue;
-
     // Determine effective lead time
     const group = product.leadTimeGroups[0]?.leadTimeGroup ?? null;
     const effectiveLeadTimeDays = product.leadTimeOverride ?? group?.leadTimeDays ?? null;
 
     // Skip products without any lead time configured
     if (effectiveLeadTimeDays === null) continue;
+
+    // Products with no velocity: show as OK (no demand = no urgency)
+    if (velocityPerDay === 0) {
+      items.push({
+        productId: product.id,
+        title: product.title,
+        topVariantTitle: product.variants[0]?.title ?? '',
+        velocityPerDay: 0,
+        totalAvailableStock,
+        leadTimeDays: effectiveLeadTimeDays,
+        effectiveBuffer: group?.bufferDays ?? Math.max(7, Math.round(effectiveLeadTimeDays * 0.15)),
+        urgency: Infinity,
+        status: 'OK',
+        reorderQty: 0,
+      });
+      continue;
+    }
 
     // Calculate effective buffer
     const effectiveBuffer =

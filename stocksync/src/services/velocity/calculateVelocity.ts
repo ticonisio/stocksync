@@ -19,7 +19,8 @@ const PERIOD_DAYS: Record<string, number> = {
  */
 export async function calculateAndSaveVelocity(
   storeId: string,
-  variantIds?: string[]
+  variantIds?: string[],
+  onProgress?: (progress: number, total: number) => void
 ): Promise<void> {
   // When recalculating specific variants (webhook), use per-variant queries
   if (variantIds && variantIds.length > 0) {
@@ -56,7 +57,8 @@ export async function calculateAndSaveVelocity(
     });
 
     // Batch upsert all velocities
-    for (const variant of allVariants) {
+    for (let i = 0; i < allVariants.length; i++) {
+      const variant = allVariants[i];
       const unitsSold = soldMap.get(variant.id) ?? 0;
       const velocityPerDay = unitsSold / days;
 
@@ -65,6 +67,11 @@ export async function calculateAndSaveVelocity(
         update: { unitsSold, velocityPerDay, calculatedAt: new Date() },
         create: { variantId: variant.id, storeId, period, unitsSold, velocityPerDay },
       });
+
+      // Report progress on last period (90d) to avoid triple-counting
+      if (period === '90d' && onProgress) {
+        onProgress(i + 1, allVariants.length);
+      }
     }
   }
 }
