@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
-import { OrdersTable } from '@/components/orders/OrdersTable';
 import { OrderFilters } from '@/components/orders/OrderFilters';
 import { OrdersRealtimeWrapper } from '@/components/orders/OrdersRealtimeWrapper';
 
