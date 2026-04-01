@@ -28,7 +28,9 @@ export async function GET(req: Request) {
 
   const velocities = await prisma.salesVelocity.findMany({
     where: { storeId: store.id, period },
-    include: {
+    select: {
+      velocityPerDay: true,
+      unitsSold: true,
       variant: {
         select: {
           productId: true,

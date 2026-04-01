@@ -2,12 +2,15 @@ export interface ProductVelocityRollup {
   productId: string;
   title: string;
   velocityPerDay: number;
+  unitsSold: number;
   totalAvailableStock: number;
   topVariantTitle: string;
+  diasRestantes: number | null; // null = no velocity (infinite stock)
 }
 
 export type SalesVelocityWithVariant = {
   velocityPerDay: number;
+  unitsSold: number;
   variant: {
     productId: string;
     title: string;
@@ -30,12 +33,15 @@ export function aggregateVelocityByProduct(
         productId,
         title: product.title,
         velocityPerDay: sv.velocityPerDay,
+        unitsSold: sv.unitsSold,
         totalAvailableStock: availableStock,
         topVariantTitle: variantTitle,
         topVelocity: sv.velocityPerDay,
+        diasRestantes: null,
       });
     } else {
       existing.velocityPerDay += sv.velocityPerDay;
+      existing.unitsSold += sv.unitsSold;
       existing.totalAvailableStock += availableStock;
       if (sv.velocityPerDay > existing.topVelocity) {
         existing.topVelocity = sv.velocityPerDay;
@@ -45,5 +51,11 @@ export function aggregateVelocityByProduct(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  return Array.from(map.values()).map(({ topVelocity: _top, ...rest }) => rest);
+  return Array.from(map.values()).map(({ topVelocity: _top, ...rest }) => {
+    const diasRestantes =
+      rest.velocityPerDay > 0
+        ? Math.floor(rest.totalAvailableStock / rest.velocityPerDay)
+        : null;
+    return { ...rest, diasRestantes };
+  });
 }

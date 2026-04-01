@@ -5,8 +5,8 @@ import { Clock } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getUrgencyItems, parsePeriod } from '@/services/inventory/urgency-service';
-import { UrgencyCard } from '@/components/lead-time/UrgencyCard';
 import { UrgencySummary } from '@/components/lead-time/UrgencySummary';
+import { UrgencyList } from '@/components/lead-time/UrgencyList';
 import { LeadTimePeriodSelector } from '@/components/lead-time/LeadTimePeriodSelector';
 import { LeadTimeAssigner } from '@/components/lead-time/LeadTimeAssigner';
 
@@ -53,11 +53,7 @@ export default async function LeadTimePage({ searchParams }: LeadTimePageProps) 
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <UrgencyCard key={item.productId} item={item} />
-          ))}
-        </div>
+        <UrgencyList items={items} />
       )}
     </div>
   );

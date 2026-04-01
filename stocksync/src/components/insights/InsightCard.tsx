@@ -1,6 +1,6 @@
 'use client';
 
-import { Package } from 'lucide-react';
+import { TrendingUp, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -9,16 +9,20 @@ interface TrendingCardProps {
   rank: number;
   title: string;
   velocityPerDay: number;
+  unitsSold: number;
   totalAvailableStock: number;
   topVariantTitle: string;
+  periodLabel: string;
 }
 
 interface ReorderCardProps {
   variant: 'reorder';
   title: string;
   velocityPerDay: number;
+  unitsSold: number;
   totalAvailableStock: number;
   diasRestantes: number;
+  periodLabel: string;
 }
 
 type InsightCardProps = TrendingCardProps | ReorderCardProps;
@@ -37,14 +41,15 @@ export function InsightCard(props: InsightCardProps) {
             {props.rank}
           </Badge>
           <div className="flex items-center justify-center w-10 h-10 rounded-md bg-muted flex-shrink-0">
-            <Package className="h-5 w-5 text-muted-foreground" />
+            <TrendingUp className="h-5 w-5 text-green-500" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-foreground truncate">{props.title}</p>
             <p className="text-sm text-muted-foreground truncate">{props.topVariantTitle}</p>
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-sm font-medium">{formatVelocity(props.velocityPerDay)}</p>
+          <div className="text-right flex-shrink-0 space-y-0.5">
+            <p className="text-sm font-medium text-green-500">{props.unitsSold} vendidos</p>
+            <p className="text-xs text-muted-foreground">{formatVelocity(props.velocityPerDay)}</p>
             <p className="text-xs text-muted-foreground">Estoque: {props.totalAvailableStock}</p>
           </div>
         </CardContent>
@@ -60,17 +65,31 @@ export function InsightCard(props: InsightCardProps) {
         ? 'text-warning'
         : 'text-foreground';
 
+  const urgencyBadge =
+    diasRestantes <= 3
+      ? 'destructive'
+      : diasRestantes <= 7
+        ? 'outline'
+        : 'default';
+
   return (
     <Card>
       <CardContent className="flex items-center gap-4 p-4">
         <div className="flex items-center justify-center w-10 h-10 rounded-md bg-muted flex-shrink-0">
-          <Package className="h-5 w-5 text-muted-foreground" />
+          <AlertTriangle className={`h-5 w-5 ${diasRestantes <= 7 ? 'text-destructive' : 'text-warning'}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-foreground truncate">{props.title}</p>
-          <p className="text-sm text-muted-foreground">{formatVelocity(props.velocityPerDay)}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-foreground truncate">{props.title}</p>
+            <Badge variant={urgencyBadge as 'destructive' | 'outline' | 'default'} className="text-xs flex-shrink-0">
+              {diasRestantes}d
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {props.unitsSold} vendidos ({props.periodLabel}) &middot; {formatVelocity(props.velocityPerDay)}
+          </p>
         </div>
-        <div className="text-right flex-shrink-0">
+        <div className="text-right flex-shrink-0 space-y-0.5">
           <p className={`text-sm font-bold ${urgencyColor}`}>
             {diasRestantes}d restantes
           </p>
