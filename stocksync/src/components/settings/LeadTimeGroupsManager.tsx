@@ -250,19 +250,25 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
     });
   }
 
+  const [error, setError] = useState('');
+
   async function handleSave() {
     setSaving(true);
+    setError('');
     try {
       const res = await fetch(`/api/lead-time-groups/${group.id}/products`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ products: Array.from(selected.values()) }),
       });
-      if (!res.ok) throw new Error('Falha ao salvar');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `Erro ${res.status}`);
+      }
       onSaved();
       onClose();
-    } catch {
-      // error handled silently — button re-enables
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar. Tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -334,6 +340,7 @@ function ProductsDialog({ open, onClose, onSaved, group }: ProductsDialogProps) 
             })
           )}
         </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar

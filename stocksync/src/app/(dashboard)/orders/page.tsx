@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { OrderFilters } from '@/components/orders/OrderFilters';
 import { OrdersRealtimeWrapper } from '@/components/orders/OrdersRealtimeWrapper';
+import { SyncOrdersButton } from '@/components/orders/SyncOrdersButton';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -72,7 +73,10 @@ export default async function OrdersPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Pedidos</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">Pedidos</h1>
+        <SyncOrdersButton />
+      </div>
 
       <Suspense fallback={<div className="h-10 bg-muted animate-pulse rounded-md" />}>
         <OrderFilters />
