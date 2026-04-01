@@ -19,10 +19,14 @@ interface DashboardSummaryCardsProps {
 
 export function DashboardSummaryCards({ initial }: DashboardSummaryCardsProps) {
   const products = useInventoryStore((s) => s.products);
+  const storeTotal = useInventoryStore((s) => s.total);
 
-  // Recalculate aggregates from Zustand when products are loaded (after realtime events)
+  // Recalculate aggregates from Zustand only when the store holds ALL products.
+  // The InventoryTable only loads one page (e.g. 25 products), so partial data
+  // would produce incorrect totals. Cost/value always use SSR values (SQL-based).
   const live = useMemo(() => {
-    if (products.length === 0) return null;
+    // Only recalculate stock counts from Zustand when we have all products
+    if (products.length === 0 || products.length < storeTotal) return null;
 
     let available = 0;
     let reserved = 0;
@@ -52,9 +56,9 @@ export function DashboardSummaryCards({ initial }: DashboardSummaryCardsProps) {
       totalCostValue: hasCost ? costSum : null,
       totalRetailValue: hasRetail ? retailSum : null,
     };
-  }, [products]);
+  }, [products, storeTotal]);
 
-  // Use live values when available, otherwise SSR initial values
+  // Use live values only when complete, otherwise SSR initial values
   const availableStock = live?.availableStock ?? initial.availableStock;
   const reservedStock = live?.reservedStock ?? initial.reservedStock;
   const totalCostValue = live ? live.totalCostValue : initial.totalCostValue;
