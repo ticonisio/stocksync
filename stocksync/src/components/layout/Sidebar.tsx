@@ -7,6 +7,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { LayoutGrid, TrendingUp, Clock, Settings, LogOut, FileSpreadsheet, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CollectionsSidebar } from '@/components/inventory/CollectionsSidebar';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
@@ -31,8 +32,9 @@ export function Sidebar({ criticalCount = 0, recentOrdersCount = 0 }: SidebarPro
 
   return (
     <aside className="hidden lg:flex flex-col w-56 border-r border-border bg-card">
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border flex items-center justify-between">
         <span className="text-xl font-bold text-foreground tracking-tight">StockSync</span>
+        <NotificationBell />
       </div>
 
       <nav className="p-2 space-y-1">

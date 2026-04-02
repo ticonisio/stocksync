@@ -83,6 +83,7 @@ model Store {
   leadTimeGroups       LeadTimeGroup[]
   salesVelocities      SalesVelocity[]
   imports              Import[]
+  notifications        Notification[]
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
@@ -108,6 +109,7 @@ model Product {
   collections      ProductCollection[]
   leadTimeGroups   ProductLeadTimeGroup[]
   importItems      ImportItem[]
+  notifications    Notification[]
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
@@ -239,6 +241,29 @@ model SalesVelocity {
 
   @@unique([variantId, period])
   @@index([storeId])
+}
+
+// ─── Notification tables ────────────────────────────────────────────────────
+
+enum NotificationType {
+  ATENCAO
+  CRITICO
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  storeId   String
+  productId String
+  type      NotificationType
+  title     String
+  message   String
+  readAt    DateTime?
+  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product   Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([storeId, readAt])
+  @@index([storeId, productId, type])
 }
 
 // ─── Import tables ───────────────────────────────────────────────────────────

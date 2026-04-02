@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
 import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity';
+import { checkAndCreateNotifications } from '@/services/notifications/notification-service';
 
 // ── HMAC verification ───────────────────────────────────────────────────────
 
@@ -342,6 +343,7 @@ export async function POST(req: Request): Promise<Response> {
       const internalIds = affectedVariants.map((v) => v.id);
       if (internalIds.length > 0) {
         await calculateAndSaveVelocity(store.id, internalIds);
+        await checkAndCreateNotifications(store.id);
       }
     } catch (err) {
       console.error('[webhook] velocity recalculation failed:', err);
@@ -360,6 +362,7 @@ export async function POST(req: Request): Promise<Response> {
       const internalIds = affectedVariants.map((v) => v.id);
       if (internalIds.length > 0) {
         await calculateAndSaveVelocity(store.id, internalIds);
+        await checkAndCreateNotifications(store.id);
       }
     } catch (err) {
       console.error('[webhook] velocity recalculation after cancel failed:', err);
@@ -378,6 +381,7 @@ export async function POST(req: Request): Promise<Response> {
       const internalIds = affectedVariants.map((v) => v.id);
       if (internalIds.length > 0) {
         await calculateAndSaveVelocity(store.id, internalIds);
+        await checkAndCreateNotifications(store.id);
       }
     } catch (err) {
       console.error('[webhook] velocity recalculation after refund failed:', err);
