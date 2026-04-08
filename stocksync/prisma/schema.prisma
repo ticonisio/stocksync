@@ -76,6 +76,7 @@ model Store {
   syncCursor           String?
   lastSyncedAt         DateTime?
   lastOrderSyncAt      DateTime?
+  stripeCustomerId     String?
   user                 User            @relation(fields: [userId], references: [id])
   products             Product[]
   collections          Collection[]
@@ -84,6 +85,7 @@ model Store {
   salesVelocities      SalesVelocity[]
   imports              Import[]
   notifications        Notification[]
+  subscription         Subscription?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
@@ -314,4 +316,37 @@ model ImportItem {
   @@index([importId])
   @@index([matchedProductId])
   @@index([matchedVariantId])
+}
+
+// ─── Subscription tables ────────────────────────────────────────────────────
+
+enum SubscriptionPlan {
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  storeId                String             @unique
+  stripeSubscriptionId   String             @unique
+  stripePriceId          String
+  plan                   SubscriptionPlan
+  status                 SubscriptionStatus @default(TRIALING)
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  store                  Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([storeId])
 }
