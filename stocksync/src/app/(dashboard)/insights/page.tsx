@@ -9,6 +9,7 @@ import { InsightCard } from '@/components/insights/InsightCard';
 import { InsightsList } from '@/components/insights/InsightsList';
 import { PeriodSelector } from '@/components/insights/PeriodSelector';
 import { Card, CardContent } from '@/components/ui/card';
+import { requireActiveSubscription } from '@/lib/require-subscription';
 
 const VALID_PERIODS = ['7d', '30d', '90d'] as const;
 type Period = (typeof VALID_PERIODS)[number];
@@ -34,6 +35,7 @@ export default async function InsightsPage({ searchParams }: InsightsPageProps) 
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+  await requireActiveSubscription(store.id);
 
   const period = parsePeriod(searchParams.period);
   const periodLabel = PERIOD_LABELS[period];

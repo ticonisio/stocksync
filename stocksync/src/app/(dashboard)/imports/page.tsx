@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { FileSpreadsheet, Plus } from 'lucide-react';
+import { requireActiveSubscription } from '@/lib/require-subscription';
 
 export default async function ImportsPage() {
   const session = await getServerSession(authOptions);
@@ -11,6 +12,7 @@ export default async function ImportsPage() {
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+  await requireActiveSubscription(store.id);
 
   const imports = await prisma.import.findMany({
     where: { storeId: store.id },

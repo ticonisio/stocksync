@@ -9,6 +9,7 @@ import { UrgencySummary } from '@/components/lead-time/UrgencySummary';
 import { UrgencyList } from '@/components/lead-time/UrgencyList';
 import { LeadTimePeriodSelector } from '@/components/lead-time/LeadTimePeriodSelector';
 import { LeadTimeAssigner } from '@/components/lead-time/LeadTimeAssigner';
+import { requireActiveSubscription } from '@/lib/require-subscription';
 
 interface LeadTimePageProps {
   searchParams: { period?: string };
@@ -20,6 +21,7 @@ export default async function LeadTimePage({ searchParams }: LeadTimePageProps) 
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+  await requireActiveSubscription(store.id);
 
   const period = parsePeriod(searchParams.period);
   const items = await getUrgencyItems(store.id, period);

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { ArrowLeft, Clock, Settings } from 'lucide-react';
 import { VariantVelocityTable } from '@/components/inventory/VariantVelocityTable';
+import { requireActiveSubscription } from '@/lib/require-subscription';
 
 type SearchParams = {
   from?: string;
@@ -34,6 +35,7 @@ export default async function ProductDetailPage({
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+  await requireActiveSubscription(store.id);
 
   const period = (searchParams.period ?? '30d') as '7d' | '30d' | '90d';
 

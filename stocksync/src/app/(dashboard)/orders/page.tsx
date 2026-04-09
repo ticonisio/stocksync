@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { OrderFilters } from '@/components/orders/OrderFilters';
 import { OrdersRealtimeWrapper } from '@/components/orders/OrdersRealtimeWrapper';
 import { SyncOrdersButton } from '@/components/orders/SyncOrdersButton';
+import { requireActiveSubscription } from '@/lib/require-subscription';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -26,6 +27,7 @@ export default async function OrdersPage({
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+  await requireActiveSubscription(store.id);
 
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10));
   const status = searchParams.status ?? '';

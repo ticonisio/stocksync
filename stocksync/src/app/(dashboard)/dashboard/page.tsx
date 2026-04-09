@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { InventoryTable } from '@/components/inventory/InventoryTable';
 import { InventoryFilters } from '@/components/inventory/InventoryFilters';
 import { getUrgencyItems } from '@/services/inventory/urgency-service';
+import { requireActiveSubscription } from '@/lib/require-subscription';
 import { UrgencyDashboardCards } from '@/components/dashboard/UrgencyDashboardCards';
 import { ReorderAlertBanner } from '@/components/dashboard/ReorderAlertBanner';
 import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards';
@@ -32,6 +33,7 @@ export default async function DashboardPage({
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) redirect('/connect-shopify');
+  await requireActiveSubscription(store.id);
 
   // Urgency data for dashboard cards and banner
   const urgencyItems = await getUrgencyItems(store.id, '30d');
