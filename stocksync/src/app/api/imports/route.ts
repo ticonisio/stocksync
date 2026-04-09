@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { checkImportLimit, isSubscriptionActive, getSubscription } from '@/lib/subscription';
 
 const importItemSchema = z.object({
   rawTitle: z.string().min(1),
@@ -48,6 +49,21 @@ export async function POST(req: Request) {
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
   if (!store) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+  }
+
+  // Check active subscription
+  const subscription = await getSubscription(store.id);
+  if (!isSubscriptionActive(subscription)) {
+    return NextResponse.json({ error: 'Assinatura inativa. Escolha um plano em Configurações.' }, { status: 403 });
+  }
+
+  // Check import limit for current plan
+  const importCheck = await checkImportLimit(store.id);
+  if (!importCheck.allowed) {
+    return NextResponse.json(
+      { error: `Limite de importações atingido (${importCheck.used}/${importCheck.limit} este mês). Faça upgrade do plano.` },
+      { status: 403 }
+    );
   }
 
   const body = await req.json();

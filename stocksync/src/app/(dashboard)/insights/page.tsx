@@ -10,6 +10,7 @@ import { InsightsList } from '@/components/insights/InsightsList';
 import { PeriodSelector } from '@/components/insights/PeriodSelector';
 import { Card, CardContent } from '@/components/ui/card';
 import { requireActiveSubscription } from '@/lib/require-subscription';
+import { getStoreWithPlan } from '@/lib/subscription';
 
 const VALID_PERIODS = ['7d', '30d', '90d'] as const;
 type Period = (typeof VALID_PERIODS)[number];
@@ -20,9 +21,11 @@ const PERIOD_LABELS: Record<Period, string> = {
   '90d': '90 dias',
 };
 
-function parsePeriod(raw: string | undefined): Period {
-  if (VALID_PERIODS.includes(raw as Period)) return raw as Period;
-  return '30d';
+function parsePeriod(raw: string | undefined, allowedPeriods: string[]): Period {
+  if (VALID_PERIODS.includes(raw as Period) && allowedPeriods.includes(raw as string)) return raw as Period;
+  // Default to the best allowed period
+  if (allowedPeriods.includes('30d')) return '30d';
+  return (allowedPeriods[0] as Period) ?? '30d';
 }
 
 interface InsightsPageProps {
@@ -37,7 +40,9 @@ export default async function InsightsPage({ searchParams }: InsightsPageProps) 
   if (!store) redirect('/connect-shopify');
   await requireActiveSubscription(store.id);
 
-  const period = parsePeriod(searchParams.period);
+  const { limits } = await getStoreWithPlan(store.id);
+  const allowedPeriods = limits.velocityPeriods;
+  const period = parsePeriod(searchParams.period, allowedPeriods);
   const periodLabel = PERIOD_LABELS[period];
 
   const velocities = await prisma.salesVelocity.findMany({
@@ -83,7 +88,7 @@ export default async function InsightsPage({ searchParams }: InsightsPageProps) 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Insights</h1>
         <Suspense fallback={<div className="flex gap-1">{VALID_PERIODS.map(p => <div key={p} className="h-9 w-20 bg-muted animate-pulse rounded-md" />)}</div>}>
-          <PeriodSelector currentPeriod={period} />
+          <PeriodSelector currentPeriod={period} allowedPeriods={allowedPeriods} />
         </Suspense>
       </div>
 
