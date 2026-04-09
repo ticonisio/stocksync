@@ -98,10 +98,14 @@ async function upsertSubscription(subscription: Stripe.Subscription) {
     return;
   }
 
-  // Stripe v22 uses snake_case in the API response
-  const sub = subscription as unknown as Record<string, unknown>;
-  const periodEnd = sub.current_period_end as number;
-  const cancelAtEnd = sub.cancel_at_period_end as boolean;
+  // Stripe SDK v22: current_period_end is on items, not subscription root
+  // For trials, fall back to trial_end. cancel_at_period_end is on subscription root.
+  const itemRaw = item as unknown as Record<string, unknown>;
+  const subRaw = subscription as unknown as Record<string, unknown>;
+  const periodEnd = (itemRaw.current_period_end as number)
+    || (subRaw.trial_end as number)
+    || Math.floor(Date.now() / 1000) + 30 * 86400;
+  const cancelAtEnd = (subRaw.cancel_at_period_end as boolean) ?? false;
 
   await prisma.subscription.upsert({
     where: { stripeSubscriptionId: subscription.id },
