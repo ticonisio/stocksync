@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { isSubscriptionActive } from '@/lib/subscription';
 
 /**
- * Server-side guard: redirects to /settings if store has no active subscription.
+ * Server-side guard: redirects to /settings only when a known subscription is inactive.
+ * Stores without a subscription record can still navigate the app and choose a plan later.
  * Call at the top of any protected page after getting the storeId.
  */
 export async function requireActiveSubscription(storeId: string): Promise<void> {
@@ -11,7 +12,7 @@ export async function requireActiveSubscription(storeId: string): Promise<void> 
     where: { storeId },
   });
 
-  if (!isSubscriptionActive(subscription)) {
+  if (subscription && !isSubscriptionActive(subscription)) {
     redirect('/settings');
   }
 }

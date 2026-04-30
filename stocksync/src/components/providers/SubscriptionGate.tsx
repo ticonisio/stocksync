@@ -8,7 +8,7 @@ interface SubscriptionGateProps {
 }
 
 /**
- * Server component that blocks access if the store has no active subscription.
+ * Server component that blocks access only when a known subscription is inactive.
  * Wraps page content — NOT the settings page (so users can choose a plan).
  */
 export async function SubscriptionGate({ storeId, children }: SubscriptionGateProps) {
@@ -16,7 +16,7 @@ export async function SubscriptionGate({ storeId, children }: SubscriptionGatePr
     where: { storeId },
   });
 
-  if (!isSubscriptionActive(subscription)) {
+  if (subscription && !isSubscriptionActive(subscription)) {
     redirect('/settings');
   }
 
