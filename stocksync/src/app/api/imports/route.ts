@@ -5,19 +5,22 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { checkImportLimit, isSubscriptionActive, getSubscription } from '@/lib/subscription';
 
+const MAX_IMPORT_ITEMS = 1000;
+const MAX_UNIT_COST = 1_000_000;
+
 const importItemSchema = z.object({
-  rawTitle: z.string().min(1),
-  rawSku: z.string().optional(),
-  quantity: z.number().int().positive('Quantidade deve ser maior que 0'),
-  unitCost: z.number().positive('Custo unitário deve ser maior que 0'),
+  rawTitle: z.string().min(1).max(500),
+  rawSku: z.string().max(128).optional(),
+  quantity: z.number().int().positive().max(1_000_000),
+  unitCost: z.number().positive().max(MAX_UNIT_COST),
   matchedProductId: z.string().nullable(),
   matchedVariantId: z.string().nullable(),
   matchStatus: z.enum(['MATCHED', 'AMBIGUOUS', 'UNMATCHED']),
 });
 
 const importRequestSchema = z.object({
-  fileName: z.string().min(1),
-  items: z.array(importItemSchema).min(1),
+  fileName: z.string().min(1).max(255),
+  items: z.array(importItemSchema).min(1).max(MAX_IMPORT_ITEMS),
 });
 
 export async function GET() {
@@ -77,6 +80,28 @@ export async function POST(req: Request) {
     (i) => i.matchStatus === 'MATCHED' && i.matchedVariantId
   );
 
+  const matchedVariantIds = [...new Set(matchedItems.map((i) => i.matchedVariantId!))];
+  if (matchedVariantIds.length > 0) {
+    const ownedVariants = await prisma.variant.findMany({
+      where: { id: { in: matchedVariantIds }, storeId: store.id },
+      select: { id: true, productId: true },
+    });
+    const ownedVariantMap = new Map(ownedVariants.map((v) => [v.id, v.productId]));
+
+    if (ownedVariantMap.size !== matchedVariantIds.length) {
+      return NextResponse.json({ error: 'Forbidden: invalid matched variant' }, { status: 403 });
+    }
+
+    const invalidProductMatch = matchedItems.some((item) => {
+      if (!item.matchedProductId) return false;
+      return ownedVariantMap.get(item.matchedVariantId!) !== item.matchedProductId;
+    });
+
+    if (invalidProductMatch) {
+      return NextResponse.json({ error: 'Forbidden: invalid matched product' }, { status: 403 });
+    }
+  }
+
   let importId: string;
 
   try {
@@ -124,7 +149,11 @@ export async function POST(req: Request) {
 
       for (const variantId of affectedVariantIds) {
         const allItems = await tx.importItem.findMany({
-          where: { matchedVariantId: variantId, matchStatus: 'MATCHED' },
+          where: {
+            matchedVariantId: variantId,
+            matchStatus: 'MATCHED',
+            import: { storeId: store.id },
+          },
         });
 
         const totalQty = allItems.reduce((s, i) => s + i.quantity, 0);

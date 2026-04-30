@@ -10,7 +10,10 @@ const schema = z.object({
   shopifyDomain: z
     .string()
     .min(1)
-    .transform((d) => d.replace(/^https?:\/\//, '').replace(/\/$/, '')),
+    .transform((d) => d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, ''))
+    .refine((d) => /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(d), {
+      message: 'Invalid Shopify domain',
+    }),
   accessToken: z.string().min(1),
 });
 

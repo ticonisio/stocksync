@@ -1,12 +1,18 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity';
 import { checkAndCreateNotifications } from '@/services/notifications/notification-service';
 
 export async function GET(req: Request): Promise<Response> {
-  // Verify Vercel cron secret to prevent unauthorized access
-  const authHeader = req.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Verify Vercel cron secret to prevent unauthorized access (constant-time comparison)
+  const authHeader = req.headers.get('authorization') ?? '';
+  const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET ?? ''}`);
+  const received = Buffer.from(authHeader);
+  const valid =
+    expected.length === received.length &&
+    crypto.timingSafeEqual(expected, received);
+  if (!valid) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -15,20 +21,23 @@ export async function GET(req: Request): Promise<Response> {
     select: { id: true, shopifyDomain: true },
   });
 
-  const results: Array<{ storeId: string; domain: string; status: string; notifications?: number }> = [];
+  let succeeded = 0;
+  let failed = 0;
+  let notifications = 0;
 
   for (const store of stores) {
     try {
       await calculateAndSaveVelocity(store.id);
       const notifs = await checkAndCreateNotifications(store.id);
-      results.push({ storeId: store.id, domain: store.shopifyDomain, status: 'ok', notifications: notifs });
+      succeeded++;
+      notifications += notifs;
     } catch (err) {
       console.error(`[cron/velocity] Failed for store ${store.id}:`, err);
-      results.push({ storeId: store.id, domain: store.shopifyDomain, status: 'error' });
+      failed++;
     }
   }
 
   console.log(`[cron/velocity] Processed ${stores.length} stores`);
 
-  return NextResponse.json({ processed: stores.length, results });
+  return NextResponse.json({ processed: stores.length, succeeded, failed, notifications });
 }

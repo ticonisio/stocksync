@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockFindUnique = vi.fn();
 const mockCompare = vi.fn();
+const mockCheckRateLimit = vi.fn();
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -16,6 +17,10 @@ vi.mock('bcryptjs', () => ({
     hash: vi.fn(),
     compare: mockCompare,
   },
+}));
+
+vi.mock('@/lib/ratelimit', () => ({
+  checkRateLimit: mockCheckRateLimit,
 }));
 
 const { authOptions } = await import('@/lib/auth');
@@ -40,13 +45,14 @@ describe('NextAuth authOptions providers', () => {
   });
 
   it('has newUser page configured', () => {
-    expect(authOptions.pages?.newUser).toBe('/onboarding/connect-shopify');
+    expect(authOptions.pages?.newUser).toBe('/connect-shopify');
   });
 });
 
 describe('NextAuth Credentials authorize()', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ allowed: true });
   });
 
   it('returns null when credentials are missing', async () => {
@@ -62,6 +68,19 @@ describe('NextAuth Credentials authorize()', () => {
       {}
     );
     expect(result).toBeNull();
+  });
+
+  it('returns null when rate limit blocks the attempt', async () => {
+    mockCheckRateLimit.mockResolvedValueOnce({ allowed: false, retryAfter: 60 });
+
+    const result = await authorize(
+      { email: 'user@example.com', password: 'password123' },
+      { headers: { 'x-forwarded-for': '203.0.113.10' } }
+    );
+
+    expect(result).toBeNull();
+    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockCheckRateLimit).toHaveBeenCalledWith('203.0.113.10:user@example.com');
   });
 
   it('returns null when user has no passwordHash (OAuth user)', async () => {

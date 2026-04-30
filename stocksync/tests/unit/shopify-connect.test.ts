@@ -13,6 +13,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: { store: { upsert: mockUpsert } },
 }));
 vi.mock('@/lib/encrypt', () => ({ encrypt: mockEncrypt }));
+vi.mock('@/services/shopify/webhooks', () => ({ registerWebhooks: vi.fn() }));
 
 // ── Helper ─────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,20 @@ describe('POST /api/shopify/connect', () => {
 
     const res = await POST(makeRequest({ shopifyDomain: '' }));
     expect(res.status).toBe(400);
+  });
+
+  it('rejeita dominio fora do formato myshopify.com canonico', async () => {
+    mockGetServerSession.mockResolvedValueOnce({ user: { id: 'user-1' } });
+    const fetchSpy = vi.spyOn(global, 'fetch');
+    const { POST } = await import('@/app/api/shopify/connect/route');
+
+    const res = await POST(makeRequest({
+      shopifyDomain: 'internal.example.com:8443/path',
+      accessToken: 'tok',
+    }));
+
+    expect(res.status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('retorna 400 quando token Shopify é inválido (401 da Shopify)', async () => {

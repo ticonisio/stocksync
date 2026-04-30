@@ -7,6 +7,7 @@ const mockPrismaStoreFindFirst = vi.fn();
 const mockPrismaImportCreate = vi.fn();
 const mockPrismaImportItemCreateMany = vi.fn();
 const mockPrismaImportItemFindMany = vi.fn();
+const mockPrismaVariantFindMany = vi.fn();
 const mockPrismaVariantUpdate = vi.fn();
 const mockPrismaImportUpdate = vi.fn();
 const mockPrismaTransaction = vi.fn();
@@ -18,6 +19,15 @@ vi.mock('next-auth', () => ({
 
 vi.mock('@/lib/auth', () => ({
   authOptions: {},
+}));
+
+vi.mock('@/lib/subscription', () => ({
+  getSubscription: vi.fn().mockResolvedValue({
+    status: 'ACTIVE',
+    currentPeriodEnd: new Date(Date.now() + 86400000),
+  }),
+  isSubscriptionActive: vi.fn().mockReturnValue(true),
+  checkImportLimit: vi.fn().mockResolvedValue({ allowed: true, used: 0, limit: 10 }),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -33,6 +43,7 @@ vi.mock('@/lib/prisma', () => ({
       findMany: (...args: unknown[]) => mockPrismaImportItemFindMany(...args),
     },
     variant: {
+      findMany: (...args: unknown[]) => mockPrismaVariantFindMany(...args),
       update: (...args: unknown[]) => mockPrismaVariantUpdate(...args),
     },
     $transaction: (...args: unknown[]) => mockPrismaTransaction(...args),
@@ -63,6 +74,7 @@ describe('POST /api/imports', () => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue(validSession);
     mockPrismaStoreFindFirst.mockResolvedValue(store);
+    mockPrismaVariantFindMany.mockResolvedValue([{ id: 'var-1', productId: 'prod-1' }]);
   });
 
   it('increments stock for matched items (NEVER sets)', async () => {
@@ -232,6 +244,29 @@ describe('POST /api/imports', () => {
     const res = await POST(req);
     expect(res.status).toBe(201);
     expect(variantUpdateCalled).toBe(false);
+  });
+
+  it('rejects matched variants from another store', async () => {
+    mockPrismaVariantFindMany.mockResolvedValueOnce([]);
+    const { POST } = await import('@/app/api/imports/route');
+
+    const req = createRequest({
+      fileName: 'test.csv',
+      items: [
+        {
+          rawTitle: 'Product A',
+          quantity: 10,
+          unitCost: 5.0,
+          matchedProductId: 'prod-1',
+          matchedVariantId: 'other-store-var',
+          matchStatus: 'MATCHED',
+        },
+      ],
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    expect(mockPrismaTransaction).not.toHaveBeenCalled();
   });
 });
 
