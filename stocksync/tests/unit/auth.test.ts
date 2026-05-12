@@ -45,7 +45,7 @@ describe('NextAuth authOptions providers', () => {
   });
 
   it('has newUser page configured', () => {
-    expect(authOptions.pages?.newUser).toBe('/connect-shopify');
+    expect(authOptions.pages?.newUser).toBe('/connect-store');
   });
 });
 

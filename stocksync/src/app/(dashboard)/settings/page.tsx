@@ -34,9 +34,9 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Integração Shopify</CardTitle>
+          <CardTitle>Integração da loja</CardTitle>
           <CardDescription>
-            Gerencie a conexão com sua loja Shopify. Troque o token de acesso caso necessário.
+            Gerencie a conexão com sua plataforma de ecommerce. Lojas Shopify podem trocar o token de acesso quando necessário.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-3">

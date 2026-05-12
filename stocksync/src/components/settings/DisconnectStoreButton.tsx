@@ -24,7 +24,7 @@ export function DisconnectStoreButton() {
     try {
       const res = await fetch('/api/shopify/disconnect', { method: 'DELETE' });
       if (res.ok) {
-        router.push('/connect-shopify');
+        router.push('/connect-store');
       }
     } finally {
       setLoading(false);
@@ -40,7 +40,7 @@ export function DisconnectStoreButton() {
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Desconectar loja Shopify?</AlertDialogTitle>
+          <AlertDialogTitle>Desconectar loja?</AlertDialogTitle>
           <AlertDialogDescription>
             Todos os dados sincronizados (produtos, pedidos, velocidade de vendas e grupos de lead
             time) serão removidos permanentemente. Você poderá reconectar uma nova loja depois.

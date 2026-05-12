@@ -37,7 +37,7 @@ export default async function InsightsPage({ searchParams }: InsightsPageProps) 
   if (!session?.user?.id) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/connect-shopify');
+  if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
   const { limits } = await getStoreWithPlan(store.id);

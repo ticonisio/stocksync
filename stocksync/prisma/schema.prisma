@@ -66,6 +66,7 @@ model VerificationToken {
 model Store {
   id                   String          @id @default(cuid())
   userId               String
+  platform             CommercePlatform @default(SHOPIFY)
   shopifyDomain        String
   accessTokenEncrypted String          @db.Text
   webhooksRegistered   Boolean         @default(false)
@@ -90,6 +91,11 @@ model Store {
   updatedAt            DateTime        @updatedAt
 
   @@unique([userId, shopifyDomain])
+}
+
+enum CommercePlatform {
+  SHOPIFY
+  NUVEMSHOP
 }
 
 enum SyncStatus {

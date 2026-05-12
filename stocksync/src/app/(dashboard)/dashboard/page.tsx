@@ -32,7 +32,7 @@ export default async function DashboardPage({
   if (!session) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/connect-shopify');
+  if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
   // Urgency data for dashboard cards and banner

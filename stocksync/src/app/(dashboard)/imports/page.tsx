@@ -11,7 +11,7 @@ export default async function ImportsPage() {
   if (!session) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/connect-shopify');
+  if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
   const imports = await prisma.import.findMany({

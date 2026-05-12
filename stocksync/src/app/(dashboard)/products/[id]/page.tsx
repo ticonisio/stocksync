@@ -34,7 +34,7 @@ export default async function ProductDetailPage({
   if (!session) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/connect-shopify');
+  if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
   const period = (searchParams.period ?? '30d') as '7d' | '30d' | '90d';

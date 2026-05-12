@@ -172,7 +172,7 @@ export default function SyncingPage() {
         <div className="flex flex-col gap-2 items-center">
           {isTokenError ? (
             <a
-              href="/connect-shopify"
+              href="/connect-store"
               className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Reconectar loja

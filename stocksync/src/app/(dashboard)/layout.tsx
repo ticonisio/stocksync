@@ -11,7 +11,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session) redirect('/login');
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
-  if (!store) redirect('/connect-shopify');
+  if (!store) redirect('/connect-store');
 
   // Fetch critical count for sidebar badge
   const urgencyItems = await getUrgencyItems(store.id, '30d');
