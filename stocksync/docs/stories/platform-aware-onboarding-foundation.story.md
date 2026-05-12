@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented - verification blocked by local command timeouts
+Implemented - DB platform field deferred
 
 ## Goal
 
@@ -66,8 +66,8 @@ Allow a new merchant to choose which ecommerce platform they use before connecti
 - [x] `/connect-store` lets the user choose Shopify or Nuvemshop.
 - [x] Shopify selection opens the existing Shopify connection flow.
 - [x] Nuvemshop selection has a defined placeholder or disabled state until its connector is built.
-- [x] `Store` records include a platform value.
-- [x] Existing Shopify stores remain compatible after migration.
+- [ ] `Store` records include a platform value.
+- [x] Existing Shopify stores remain compatible without requiring a production DB migration.
 - [x] Shopify connection still validates credentials and registers webhooks as before.
 - [x] Generic UI copy no longer implies StockSync only supports Shopify.
 - [x] Tests cover redirect, platform selection, and Shopify compatibility.
@@ -75,7 +75,6 @@ Allow a new merchant to choose which ecommerce platform they use before connecti
 ## File List
 
 - `prisma/schema.prisma`
-- `prisma/migrations/20260511120000_add_store_platform/migration.sql`
 - `src/lib/auth.ts`
 - `src/app/(dashboard)/layout.tsx`
 - `src/app/(dashboard)/**/page.tsx`
@@ -105,4 +104,4 @@ Allow a new merchant to choose which ecommerce platform they use before connecti
 - The first implementation should avoid pretending Nuvemshop is fully available until auth and sync are implemented.
 - Prisma format and generate were run successfully via local CLI.
 - `npm test`, `npm run lint`, and `npm run typecheck` timed out locally before returning diagnostics; single-file Vitest and direct `tsc`/`next lint` attempts also timed out.
-- Vercel build now runs `prisma migrate deploy` before `prisma generate` and `next build` so production database migrations are applied during deployment.
+- The `Store.platform` schema change was deferred because production Supabase is not reachable from local or Vercel build over the current `db.<project>.supabase.co:5432` URL. Keep the UI flow live first, then add the platform column after switching production to a reachable pooled database URL or applying the SQL in Supabase.

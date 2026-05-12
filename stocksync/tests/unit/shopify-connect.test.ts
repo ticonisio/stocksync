@@ -93,7 +93,6 @@ describe('POST /api/shopify/connect', () => {
     );
     mockUpsert.mockResolvedValueOnce({
       id: 'store-id',
-      platform: 'SHOPIFY',
       shopifyDomain: 'test.myshopify.com',
       syncStatus: 'PENDING',
     });
@@ -103,7 +102,6 @@ describe('POST /api/shopify/connect', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.store.shopifyDomain).toBe('test.myshopify.com');
-    expect(json.store.platform).toBe('SHOPIFY');
     expect(json.store.syncStatus).toBe('PENDING');
     // token nunca deve aparecer na resposta
     expect(JSON.stringify(json)).not.toContain('valid-token');
@@ -116,7 +114,6 @@ describe('POST /api/shopify/connect', () => {
     );
     mockUpsert.mockResolvedValueOnce({
       id: 'store-id',
-      platform: 'SHOPIFY',
       shopifyDomain: 'test.myshopify.com',
       syncStatus: 'PENDING',
     });
@@ -127,8 +124,6 @@ describe('POST /api/shopify/connect', () => {
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId_shopifyDomain: { userId: 'user-1', shopifyDomain: 'test.myshopify.com' } },
-        update: expect.objectContaining({ platform: 'SHOPIFY' }),
-        create: expect.objectContaining({ platform: 'SHOPIFY' }),
       })
     );
   });

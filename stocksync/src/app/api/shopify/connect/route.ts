@@ -67,12 +67,10 @@ export async function POST(req: Request) {
     },
     update: {
       accessTokenEncrypted: encrypt(accessToken),
-      platform: 'SHOPIFY',
       syncStatus: 'PENDING',
     },
     create: {
       userId: session.user.id,
-      platform: 'SHOPIFY',
       shopifyDomain,
       accessTokenEncrypted: encrypt(accessToken),
       syncStatus: 'PENDING',
@@ -86,7 +84,6 @@ export async function POST(req: Request) {
   return NextResponse.json({
     store: {
       id: store.id,
-      platform: store.platform,
       shopifyDomain: store.shopifyDomain,
       syncStatus: store.syncStatus,
     },
