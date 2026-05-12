@@ -105,3 +105,4 @@ Allow a new merchant to choose which ecommerce platform they use before connecti
 - The first implementation should avoid pretending Nuvemshop is fully available until auth and sync are implemented.
 - Prisma format and generate were run successfully via local CLI.
 - `npm test`, `npm run lint`, and `npm run typecheck` timed out locally before returning diagnostics; single-file Vitest and direct `tsc`/`next lint` attempts also timed out.
+- Vercel build now runs `prisma migrate deploy` before `prisma generate` and `next build` so production database migrations are applied during deployment.
