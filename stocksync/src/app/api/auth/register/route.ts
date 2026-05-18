@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/ratelimit';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
@@ -10,6 +11,15 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+  const { allowed, retryAfter } = await checkRateLimit(ip);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Muitas tentativas. Tente novamente em breve.' },
+      { status: 429, headers: { 'Retry-After': String(retryAfter ?? 60) } }
+    );
+  }
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
 
@@ -21,7 +31,12 @@ export async function POST(req: NextRequest) {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return NextResponse.json({ error: 'Email já cadastrado' }, { status: 409 });
+    // Hash anyway to prevent timing oracle — don't reveal if email exists
+    await bcrypt.hash(password, 12);
+    return NextResponse.json(
+      { message: 'Se este email ainda não estiver cadastrado, a conta foi criada.' },
+      { status: 200 }
+    );
   }
 
   const passwordHash = await bcrypt.hash(password, 12);

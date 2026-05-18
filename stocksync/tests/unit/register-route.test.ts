@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock prisma
+const mockCheckRateLimit = vi.fn();
+
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
@@ -11,7 +12,10 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
-// Mock bcryptjs
+vi.mock('@/lib/ratelimit', () => ({
+  checkRateLimit: mockCheckRateLimit,
+}));
+
 vi.mock('bcryptjs', () => ({
   default: {
     hash: vi.fn().mockResolvedValue('hashed_password'),
@@ -30,6 +34,7 @@ function makeRequest(body: object) {
 describe('POST /api/auth/register', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckRateLimit.mockResolvedValue({ allowed: true });
   });
 
   it('returns 400 for invalid data', async () => {
@@ -39,7 +44,24 @@ describe('POST /api/auth/register', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 409 when email already exists', async () => {
+  it('returns 429 when rate limit blocks registration', async () => {
+    const { prisma } = await import('@/lib/prisma');
+    const { POST } = await import('@/app/api/auth/register/route');
+    mockCheckRateLimit.mockResolvedValueOnce({ allowed: false, retryAfter: 60 });
+
+    const req = makeRequest({
+      name: 'User',
+      email: 'user@example.com',
+      password: 'password123',
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('60');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 with a generic message when email already exists', async () => {
     const { prisma } = await import('@/lib/prisma');
     const { POST } = await import('@/app/api/auth/register/route');
 
@@ -54,9 +76,10 @@ describe('POST /api/auth/register', () => {
       password: 'password123',
     });
     const res = await POST(req);
-    expect(res.status).toBe(409);
+
+    expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.error).toBe('Email já cadastrado');
+    expect(data.message).toContain('conta foi criada');
   });
 
   it('returns 201 with user data (no passwordHash) on success', async () => {

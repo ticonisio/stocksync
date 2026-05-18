@@ -9,6 +9,9 @@ function createRedis() {
 }
 
 const redis = createRedis();
+const MEMORY_LIMIT = 5;
+const MEMORY_WINDOW_MS = 60_000;
+const memoryHits = new Map<string, { count: number; resetAt: number }>();
 
 export const authLimiter = redis
   ? new Ratelimit({
@@ -18,9 +21,30 @@ export const authLimiter = redis
     })
   : null;
 
+function checkMemoryRateLimit(key: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const current = memoryHits.get(key);
+
+  if (!current || current.resetAt <= now) {
+    memoryHits.set(key, { count: 1, resetAt: now + MEMORY_WINDOW_MS });
+    return { allowed: true };
+  }
+
+  if (current.count >= MEMORY_LIMIT) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((current.resetAt - now) / 1000),
+    };
+  }
+
+  current.count += 1;
+  memoryHits.set(key, current);
+  return { allowed: true };
+}
+
 export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; retryAfter?: number }> {
   if (!authLimiter) {
-    return { allowed: process.env.NODE_ENV !== 'production' };
+    return checkMemoryRateLimit(ip);
   }
 
   const { success, reset } = await authLimiter.limit(ip);
