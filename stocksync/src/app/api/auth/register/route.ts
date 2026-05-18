@@ -5,9 +5,9 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 const schema = z.object({
-  name: z.string().min(1, 'Nome é obrigatório'),
-  email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres'),
+  name: z.string().min(1, 'Nome e obrigatorio'),
+  email: z.string().trim().email('Email invalido').transform((value) => value.toLowerCase()),
+  password: z.string().min(8, 'Senha deve ter no minimo 8 caracteres'),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,17 +24,17 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 });
+    return NextResponse.json({ error: 'Dados invalidos' }, { status: 400 });
   }
 
   const { name, email, password } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    // Hash anyway to prevent timing oracle — don't reveal if email exists
+    // Hash anyway to reduce timing differences without revealing if the email exists.
     await bcrypt.hash(password, 12);
     return NextResponse.json(
-      { message: 'Se este email ainda não estiver cadastrado, a conta foi criada.' },
+      { message: 'Se este email ainda nao estiver cadastrado, a conta foi criada.' },
       { status: 200 }
     );
   }

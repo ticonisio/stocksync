@@ -47,6 +47,12 @@ function RegisterForm() {
       return;
     }
 
+    if (res.status !== 201) {
+      setError('Se este email ja estiver cadastrado, entre pela tela de login.');
+      setLoading(false);
+      return;
+    }
+
     const result = await signIn('credentials', {
       email,
       password,
