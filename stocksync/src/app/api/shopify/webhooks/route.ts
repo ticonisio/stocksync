@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
 import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity';
 import { checkAndCreateNotifications } from '@/services/notifications/notification-service';
+import type { Prisma } from '@prisma/client';
 
 // ── HMAC verification ───────────────────────────────────────────────────────
 
@@ -29,40 +30,58 @@ interface ShopifyOrderPayload {
   }>;
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'P2002'
+  );
+}
+
 // ── Order processors ────────────────────────────────────────────────────────
 
 /** orders/create — FR8: pedido pendente → reservedStock incrementado */
-async function processOrderCreate(storeId: string, payload: ShopifyOrderPayload): Promise<void> {
+async function processOrderCreate(
+  db: Prisma.TransactionClient,
+  storeId: string,
+  payload: ShopifyOrderPayload
+): Promise<void> {
   const shopifyOrderId = String(payload.id);
 
-  const order = await prisma.order.upsert({
+  // Different webhook deliveries can describe the same order. Never reserve it twice.
+  const existingOrder = await db.order.findUnique({
     where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
-    update: {},
-    create: { storeId, shopifyOrderId, status: 'PENDING' },
+  });
+  if (existingOrder) return;
+
+  // The surrounding transaction ensures a later failure cannot leave a
+  // partially reserved order behind. A concurrent create may fail on the
+  // unique key; Shopify will retry and the lookup above will then short-circuit.
+  const order = await db.order.create({
+    data: { storeId, shopifyOrderId, status: 'PENDING' },
+    select: { id: true },
   });
 
-  // Only process if newly created as PENDING (not if already exists as PAID)
-  if (order.status !== 'PENDING') return;
-
   for (const item of payload.line_items) {
-    const variant = await prisma.variant.findUnique({
+    const variant = await db.variant.findUnique({
       where: {
         storeId_shopifyVariantId: { storeId, shopifyVariantId: String(item.variant_id) },
       },
     });
     if (!variant) continue;
 
-    const existingItem = await prisma.orderItem.findFirst({
+    const existingItem = await db.orderItem.findFirst({
       where: { orderId: order.id, variantId: variant.id },
     });
     if (!existingItem) {
-      await prisma.orderItem.create({
+      await db.orderItem.create({
         data: { orderId: order.id, variantId: variant.id, quantity: item.quantity },
       });
     }
 
     // FR8: Mark as reserved — does NOT decrement available yet
-    await prisma.$executeRaw`
+    await db.$executeRaw`
       UPDATE "Variant"
       SET "reservedStock" = "reservedStock" + ${item.quantity}
       WHERE "id" = ${variant.id}
@@ -71,41 +90,65 @@ async function processOrderCreate(storeId: string, payload: ShopifyOrderPayload)
 }
 
 /** orders/paid — FR7: decrementa available. Se PENDING→PAID, também libera reserved (Story 2.4 AC2) */
-async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): Promise<void> {
+async function processOrderPaid(
+  db: Prisma.TransactionClient,
+  storeId: string,
+  payload: ShopifyOrderPayload
+): Promise<void> {
   const shopifyOrderId = String(payload.id);
 
   // Check if order already exists as PENDING (came through orders/create first)
-  const existingOrder = await prisma.order.findUnique({
+  const existingOrder = await db.order.findUnique({
     where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
   });
+  // Ignore repeated or out-of-order terminal transitions. This prevents stock
+  // from being decremented twice when Shopify sends more than one delivery.
+  if (
+    existingOrder?.status === 'PAID' ||
+    existingOrder?.status === 'CANCELLED' ||
+    existingOrder?.status === 'REFUNDED'
+  ) {
+    return;
+  }
   const wasPending = existingOrder?.status === 'PENDING';
+  let order: { id: string };
 
-  const order = await prisma.order.upsert({
-    where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
-    update: { status: 'PAID' },
-    create: { storeId, shopifyOrderId, status: 'PAID' },
-  });
+  if (existingOrder) {
+    // Only one concurrent delivery may perform the PENDING -> PAID transition.
+    // The conditional update becomes false after the first transaction commits.
+    const transition = await db.order.updateMany({
+      where: { id: existingOrder.id, status: 'PENDING' },
+      data: { status: 'PAID' },
+    });
+    if (transition.count === 0) return;
+    order = existingOrder;
+  } else {
+    order = await db.order.create({
+      data: { storeId, shopifyOrderId, status: 'PAID' },
+      select: { id: true },
+    });
+  }
 
   for (const item of payload.line_items) {
-    const variant = await prisma.variant.findUnique({
+    const variant = await db.variant.findUnique({
       where: {
         storeId_shopifyVariantId: { storeId, shopifyVariantId: String(item.variant_id) },
       },
     });
     if (!variant) continue;
 
-    const existingItem = await prisma.orderItem.findFirst({
+    const existingItem = await db.orderItem.findFirst({
       where: { orderId: order.id, variantId: variant.id },
     });
     if (!existingItem) {
-      await prisma.orderItem.create({
+      await db.orderItem.create({
         data: { orderId: order.id, variantId: variant.id, quantity: item.quantity },
       });
     }
 
     if (wasPending) {
       // PENDING→PAID: move from reserved to committed, decrement available
-      await prisma.$executeRaw`
+      await db.$executeRaw`
         UPDATE "Variant"
         SET "availableStock" = GREATEST(0, "availableStock" - ${item.quantity}),
             "reservedStock" = GREATEST(0, "reservedStock" - ${item.quantity})
@@ -113,7 +156,7 @@ async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): 
       `;
     } else {
       // Direct PAID (no prior orders/create): just decrement available
-      await prisma.$executeRaw`
+      await db.$executeRaw`
         UPDATE "Variant"
         SET "availableStock" = GREATEST(0, "availableStock" - ${item.quantity})
         WHERE "id" = ${variant.id}
@@ -123,33 +166,42 @@ async function processOrderPaid(storeId: string, payload: ShopifyOrderPayload): 
 }
 
 async function processOrderCancelled(
+  db: Prisma.TransactionClient,
   storeId: string,
   payload: ShopifyOrderPayload,
   newStatus: 'CANCELLED' | 'REFUNDED'
 ): Promise<void> {
   const shopifyOrderId = String(payload.id);
 
-  const order = await prisma.order.findUnique({
+  const order = await db.order.findUnique({
     where: { storeId_shopifyOrderId: { storeId, shopifyOrderId } },
     include: { items: true },
   });
   if (!order) return;
 
   const wasPending = order.status === 'PENDING';
+  const wasPaid = order.status === 'PAID';
+  if (!wasPending && !wasPaid) return;
 
-  await prisma.order.update({ where: { id: order.id }, data: { status: newStatus } });
+  // Prevent two different deliveries (for example cancelled and refunded)
+  // from restoring the same stock concurrently.
+  const transition = await db.order.updateMany({
+    where: { id: order.id, status: order.status },
+    data: { status: newStatus },
+  });
+  if (transition.count === 0) return;
 
   for (const item of order.items) {
     if (wasPending) {
       // FR9: PENDING cancelled → release reserved (not available)
-      await prisma.$executeRaw`
+      await db.$executeRaw`
         UPDATE "Variant"
         SET "reservedStock" = GREATEST(0, "reservedStock" - ${item.quantity})
         WHERE "id" = ${item.variantId}
       `;
-    } else {
+    } else if (wasPaid) {
       // FR9/FR10: PAID cancelled/refunded → restore available
-      await prisma.variant.update({
+      await db.variant.update({
         where: { id: item.variantId },
         data: { availableStock: { increment: item.quantity } },
       });
@@ -269,15 +321,22 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
 
-  // Parse payload
-  const rawPayload = JSON.parse(rawBuffer.toString('utf-8')) as unknown;
+  // Parse only after HMAC verification, but return a client error for signed invalid JSON.
+  let rawPayload: unknown;
+  try {
+    rawPayload = JSON.parse(rawBuffer.toString('utf-8')) as unknown;
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+  }
 
   const isProductTopic = topic === 'products/update' || topic === 'products/create';
 
-  // Idempotency: for order webhooks use shopifyOrderId; for product webhooks use product ID from payload
-  const idempotencyKey = isProductTopic
-    ? String((rawPayload as ShopifyProductPayload).id)
-    : (req.headers.get('X-Shopify-Order-Id') ?? '');
+  // Shopify guarantees a unique delivery ID and recommends using it to ignore retries.
+  // The existing DB column is kept for migration compatibility, but stores this delivery ID.
+  const idempotencyKey = req.headers.get('X-Shopify-Webhook-Id') ?? '';
+  if (!idempotencyKey) {
+    return NextResponse.json({ error: 'Missing webhook ID' }, { status: 400 });
+  }
 
   const existing = await prisma.webhookEvent.findUnique({
     where: {
@@ -288,34 +347,15 @@ export async function POST(req: Request): Promise<Response> {
       },
     },
   });
-  if (existing && !isProductTopic) {
-    return NextResponse.json({ ok: true }); // duplicate order — ignore silently
+  if (existing) {
+    return NextResponse.json({ ok: true }); // duplicate delivery — ignore silently
   }
 
-  // Persist webhook event (upsert for product topics to allow re-processing)
-  if (isProductTopic) {
-    await prisma.webhookEvent.upsert({
-      where: {
-        storeId_shopifyOrderId_eventType: {
-          storeId: store.id,
-          shopifyOrderId: idempotencyKey,
-          eventType: topic,
-        },
-      },
-      update: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        rawPayload: rawPayload as any,
-      },
-      create: {
-        storeId: store.id,
-        shopifyOrderId: idempotencyKey,
-        eventType: topic,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        rawPayload: rawPayload as any,
-      },
-    });
-  } else {
-    await prisma.webhookEvent.create({
+  // Create a processing lock before mutating inventory. If processing fails, the
+  // record is removed so Shopify's retry can safely try again.
+  let webhookEvent: { id: string };
+  try {
+    webhookEvent = await prisma.webhookEvent.create({
       data: {
         storeId: store.id,
         shopifyOrderId: idempotencyKey,
@@ -323,33 +363,44 @@ export async function POST(req: Request): Promise<Response> {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         rawPayload: rawPayload as any,
       },
+      select: { id: true },
     });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json({ ok: true });
+    }
+    throw error;
   }
 
-  // Process by topic
-  if (topic === 'orders/create') {
-    await processOrderCreate(store.id, rawPayload as ShopifyOrderPayload);
-  } else if (topic === 'orders/paid') {
-    const payload = rawPayload as ShopifyOrderPayload;
-    await processOrderPaid(store.id, payload);
+  try {
+    // Process by topic
+    if (topic === 'orders/create') {
+      await prisma.$transaction((tx) =>
+        processOrderCreate(tx, store.id, rawPayload as ShopifyOrderPayload)
+      );
+    } else if (topic === 'orders/paid') {
+      const payload = rawPayload as ShopifyOrderPayload;
+      await prisma.$transaction((tx) => processOrderPaid(tx, store.id, payload));
 
-    // Recalcular velocity das variantes afetadas — falha isolada, não afeta resposta do webhook
-    try {
-      const shopifyVariantIds = payload.line_items.map((i) => String(i.variant_id));
-      const affectedVariants = await prisma.variant.findMany({
-        where: { storeId: store.id, shopifyVariantId: { in: shopifyVariantIds } },
-        select: { id: true },
-      });
-      const internalIds = affectedVariants.map((v) => v.id);
-      if (internalIds.length > 0) {
-        await calculateAndSaveVelocity(store.id, internalIds);
-        await checkAndCreateNotifications(store.id);
+      // Recalcular velocity das variantes afetadas — falha isolada, não afeta resposta do webhook
+      try {
+        const shopifyVariantIds = payload.line_items.map((i) => String(i.variant_id));
+        const affectedVariants = await prisma.variant.findMany({
+          where: { storeId: store.id, shopifyVariantId: { in: shopifyVariantIds } },
+          select: { id: true },
+        });
+        const internalIds = affectedVariants.map((v) => v.id);
+        if (internalIds.length > 0) {
+          await calculateAndSaveVelocity(store.id, internalIds);
+          await checkAndCreateNotifications(store.id);
+        }
+      } catch (err) {
+        console.error('[webhook] velocity recalculation failed:', err);
       }
-    } catch (err) {
-      console.error('[webhook] velocity recalculation failed:', err);
-    }
-  } else if (topic === 'orders/cancelled') {
-    await processOrderCancelled(store.id, rawPayload as ShopifyOrderPayload, 'CANCELLED');
+    } else if (topic === 'orders/cancelled') {
+      await prisma.$transaction((tx) =>
+        processOrderCancelled(tx, store.id, rawPayload as ShopifyOrderPayload, 'CANCELLED')
+      );
 
     // Recalcular velocity — cancel remove a venda do dataset (FR16)
     try {
@@ -367,8 +418,10 @@ export async function POST(req: Request): Promise<Response> {
     } catch (err) {
       console.error('[webhook] velocity recalculation after cancel failed:', err);
     }
-  } else if (topic === 'orders/refunded') {
-    await processOrderCancelled(store.id, rawPayload as ShopifyOrderPayload, 'REFUNDED');
+    } else if (topic === 'orders/refunded') {
+      await prisma.$transaction((tx) =>
+        processOrderCancelled(tx, store.id, rawPayload as ShopifyOrderPayload, 'REFUNDED')
+      );
 
     // Recalcular velocity — refund remove a venda do dataset (FR16)
     try {
@@ -386,11 +439,18 @@ export async function POST(req: Request): Promise<Response> {
     } catch (err) {
       console.error('[webhook] velocity recalculation after refund failed:', err);
     }
-  } else if (isProductTopic) {
-    await processProductUpdate(store.id, rawPayload as ShopifyProductPayload);
-  }
+    } else if (isProductTopic) {
+      await processProductUpdate(store.id, rawPayload as ShopifyProductPayload);
+    }
 
-  console.log(`[webhook] processed ${topic} for store ${store.id}`);
+    console.log(`[webhook] processed ${topic} for store ${store.id}`);
+  } catch (error) {
+    await prisma.webhookEvent
+      .delete({ where: { id: webhookEvent.id } })
+      .catch((cleanupError) => console.error('[webhook] failed to release processing lock:', cleanupError));
+    console.error(`[webhook] failed ${topic} for store ${store.id}:`, error);
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

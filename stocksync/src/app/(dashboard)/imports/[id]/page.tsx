@@ -9,8 +9,9 @@ import { requireActiveSubscription } from '@/lib/require-subscription';
 export default async function ImportDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
@@ -20,7 +21,7 @@ export default async function ImportDetailPage({
 
   const importRecord = await prisma.import.findFirst({
     where: {
-      id: params.id,
+      id,
       storeId: store.id,
     },
     include: {

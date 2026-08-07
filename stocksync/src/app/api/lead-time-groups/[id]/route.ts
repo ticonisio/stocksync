@@ -21,13 +21,14 @@ async function getAuthorizedGroup(userId: string, groupId: string) {
   return { store, group };
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { store, group } = await getAuthorizedGroup(session.user.id, params.id);
+  const { store, group } = await getAuthorizedGroup(session.user.id, id);
   if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
@@ -39,13 +40,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return NextResponse.json({ group: fullGroup });
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { store, group } = await getAuthorizedGroup(session.user.id, params.id);
+  const { store, group } = await getAuthorizedGroup(session.user.id, id);
   if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
@@ -65,13 +67,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json({ group: updated });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { store, group } = await getAuthorizedGroup(session.user.id, params.id);
+  const { store, group } = await getAuthorizedGroup(session.user.id, id);
   if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 

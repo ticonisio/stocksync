@@ -27,9 +27,10 @@ export default async function ProductDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: SearchParams;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
@@ -37,10 +38,10 @@ export default async function ProductDetailPage({
   if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
-  const period = (searchParams.period ?? '30d') as '7d' | '30d' | '90d';
+  const period = (query.period ?? '30d') as '7d' | '30d' | '90d';
 
   const product = await prisma.product.findFirst({
-    where: { id: params.id, storeId: store.id },
+    where: { id, storeId: store.id },
     include: {
       variants: {
         include: {
@@ -60,7 +61,7 @@ export default async function ProductDetailPage({
   if (!product) notFound();
 
   const recentEvents = await prisma.orderItem.findMany({
-    where: { variant: { productId: params.id, storeId: store.id } },
+    where: { variant: { productId: id, storeId: store.id } },
     include: {
       order: { select: { shopifyOrderId: true, status: true, createdAt: true } },
       variant: { select: { title: true, sku: true } },
@@ -69,7 +70,7 @@ export default async function ProductDetailPage({
     take: 10,
   });
 
-  const backHref = searchParams.from ? decodeURIComponent(searchParams.from) : '/dashboard';
+  const backHref = query.from ? decodeURIComponent(query.from) : '/dashboard';
   const primaryLeadTimeGroup = product.leadTimeGroups[0]?.leadTimeGroup ?? null;
 
   return (
@@ -112,7 +113,7 @@ export default async function ProductDetailPage({
 
       {/* Tabela de variantes com velocity e lead time inline (Client Component) */}
       <VariantVelocityTable
-        productId={params.id}
+        productId={id}
         initialVariants={product.variants}
         initialPeriod={period}
       />

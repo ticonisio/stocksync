@@ -13,7 +13,8 @@ const productsSchema = z.object({
   ),
 });
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,7 +24,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 });
 
   const group = await prisma.leadTimeGroup.findFirst({
-    where: { id: params.id, storeId: store.id },
+    where: { id, storeId: store.id },
   });
   if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 

@@ -10,8 +10,9 @@ const schema = z.object({
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
+  const { productId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,7 +29,7 @@ export async function PATCH(
   }
 
   const result = await prisma.product.updateMany({
-    where: { id: params.productId, storeId: store.id },
+    where: { id: productId, storeId: store.id },
     data: { leadTimeOverride: body.data.leadTimeOverride },
   });
 
