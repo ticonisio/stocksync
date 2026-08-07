@@ -20,8 +20,9 @@ type SearchParams = {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
+  const query = await searchParams;
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
@@ -29,9 +30,9 @@ export default async function OrdersPage({
   if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
-  const page = Math.max(1, parseInt(searchParams.page ?? '1', 10));
-  const status = searchParams.status ?? '';
-  const search = searchParams.search?.trim() ?? '';
+  const page = Math.max(1, parseInt(query.page ?? '1', 10));
+  const status = query.status ?? '';
+  const search = query.search?.trim() ?? '';
 
   const where: Prisma.OrderWhereInput = {
     storeId: store.id,
@@ -75,9 +76,14 @@ export default async function OrdersPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Pedidos</h1>
-        <SyncOrdersButton />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Pedidos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Importe vendas anteriores para gerar insights desde o primeiro acesso.
+          </p>
+        </div>
+        <SyncOrdersButton lastOrderSyncAt={store.lastOrderSyncAt?.toISOString() ?? null} />
       </div>
 
       <Suspense fallback={<div className="h-10 bg-muted animate-pulse rounded-md" />}>

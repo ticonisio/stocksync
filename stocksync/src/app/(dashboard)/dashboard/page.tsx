@@ -26,8 +26,9 @@ type SearchParams = {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
+  const query = await searchParams;
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
@@ -41,13 +42,13 @@ export default async function DashboardPage({
   const urgencyWarning = urgencyItems.filter((i) => i.status === 'ATENÇÃO').length;
   const urgencyOk = urgencyItems.filter((i) => i.status === 'OK').length;
 
-  const page = Math.max(1, parseInt(searchParams.page ?? '1', 10));
+  const page = Math.max(1, parseInt(query.page ?? '1', 10));
   const skip = (page - 1) * ITEMS_PER_PAGE;
 
-  const search = searchParams.search?.trim() ?? '';
-  const sort = searchParams.sort ?? 'name';
-  const order = (searchParams.order ?? 'asc') as 'asc' | 'desc';
-  const collectionId = searchParams.collectionId ?? '';
+  const search = query.search?.trim() ?? '';
+  const sort = query.sort ?? 'name';
+  const order = (query.order ?? 'asc') as 'asc' | 'desc';
+  const collectionId = query.collectionId ?? '';
 
   // Validate collectionId if provided (cross-store protection)
   let activeCollection: { id: string; title: string } | null = null;
@@ -170,7 +171,7 @@ export default async function DashboardPage({
               : productsWithRollup;
 
   // Post-query status filter
-  const status = searchParams.status ?? 'all';
+  const status = query.status ?? 'all';
   const filteredProducts =
     status === 'available'
       ? sortedProducts.filter((p) => p.availableRollup > 0)

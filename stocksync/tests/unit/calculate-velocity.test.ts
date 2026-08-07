@@ -5,10 +5,12 @@ import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity'
 
 const {
   mockVariantFindMany,
+  mockQueryRaw,
   mockOrderItemAggregate,
   mockSalesVelocityUpsert,
 } = vi.hoisted(() => ({
   mockVariantFindMany: vi.fn(),
+  mockQueryRaw: vi.fn(),
   mockOrderItemAggregate: vi.fn(),
   mockSalesVelocityUpsert: vi.fn(),
 }));
@@ -18,6 +20,7 @@ vi.mock('@/lib/prisma', () => ({
     variant: { findMany: mockVariantFindMany },
     orderItem: { aggregate: mockOrderItemAggregate },
     salesVelocity: { upsert: mockSalesVelocityUpsert },
+    $queryRaw: mockQueryRaw,
   },
 }));
 
@@ -33,15 +36,16 @@ describe('calculateAndSaveVelocity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSalesVelocityUpsert.mockResolvedValue({});
+    mockQueryRaw.mockResolvedValue([]);
   });
 
   it('calcula velocity correta para 7d, 30d e 90d', async () => {
-    mockVariantFindMany.mockResolvedValueOnce([VARIANT_A]);
+    mockVariantFindMany.mockResolvedValue([VARIANT_A]);
     // 7d: 14 unidades vendidas → 14/7 = 2.0 un/dia
-    mockOrderItemAggregate
-      .mockResolvedValueOnce({ _sum: { quantity: 14 } })  // 7d
-      .mockResolvedValueOnce({ _sum: { quantity: 60 } })  // 30d → 2.0
-      .mockResolvedValueOnce({ _sum: { quantity: 90 } }); // 90d → 1.0
+    mockQueryRaw
+      .mockResolvedValueOnce([{ variantId: 'variant-a', unitsSold: 14n }]) // 7d
+      .mockResolvedValueOnce([{ variantId: 'variant-a', unitsSold: 60n }]) // 30d → 2.0
+      .mockResolvedValueOnce([{ variantId: 'variant-a', unitsSold: 90n }]); // 90d → 1.0
 
     await calculateAndSaveVelocity(STORE_ID);
 
@@ -74,11 +78,8 @@ describe('calculateAndSaveVelocity', () => {
   });
 
   it('persiste unitsSold: 0 e velocityPerDay: 0 para variante sem vendas', async () => {
-    mockVariantFindMany.mockResolvedValueOnce([VARIANT_A]);
-    mockOrderItemAggregate
-      .mockResolvedValueOnce({ _sum: { quantity: null } }) // 7d — sem vendas
-      .mockResolvedValueOnce({ _sum: { quantity: null } }) // 30d
-      .mockResolvedValueOnce({ _sum: { quantity: null } }); // 90d
+    mockVariantFindMany.mockResolvedValue([VARIANT_A]);
+    mockQueryRaw.mockResolvedValue([]);
 
     await calculateAndSaveVelocity(STORE_ID);
 
@@ -90,23 +91,26 @@ describe('calculateAndSaveVelocity', () => {
   });
 
   it('restringe recálculo às variantIds fornecidas', async () => {
-    mockVariantFindMany.mockResolvedValueOnce([VARIANT_A]);
     mockOrderItemAggregate.mockResolvedValue({ _sum: { quantity: 10 } });
 
     await calculateAndSaveVelocity(STORE_ID, ['variant-a']);
 
-    expect(mockVariantFindMany).toHaveBeenCalledWith(
+    expect(mockOrderItemAggregate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          id: { in: ['variant-a'] },
+          variantId: 'variant-a',
         }),
       })
     );
+    expect(mockVariantFindMany).not.toHaveBeenCalled();
   });
 
   it('recalcula todas as variantes quando variantIds omitido', async () => {
-    mockVariantFindMany.mockResolvedValueOnce([VARIANT_A, VARIANT_B]);
-    mockOrderItemAggregate.mockResolvedValue({ _sum: { quantity: 5 } });
+    mockVariantFindMany.mockResolvedValue([VARIANT_A, VARIANT_B]);
+    mockQueryRaw.mockResolvedValue([
+      { variantId: 'variant-a', unitsSold: 5n },
+      { variantId: 'variant-b', unitsSold: 5n },
+    ]);
 
     await calculateAndSaveVelocity(STORE_ID);
 
@@ -121,7 +125,7 @@ describe('calculateAndSaveVelocity', () => {
 
   it('UPSERT é idempotente — segundo chamada não duplica', async () => {
     mockVariantFindMany.mockResolvedValue([VARIANT_A]);
-    mockOrderItemAggregate.mockResolvedValue({ _sum: { quantity: 7 } });
+    mockQueryRaw.mockResolvedValue([{ variantId: 'variant-a', unitsSold: 7n }]);
 
     await calculateAndSaveVelocity(STORE_ID);
     await calculateAndSaveVelocity(STORE_ID);

@@ -5,6 +5,7 @@ import { renderHook } from '@testing-library/react';
 
 const {
   mockUpdateVariant,
+  mockApplyDelta,
   mockMarkUpdated,
   mockClearUpdated,
   mockSetProducts,
@@ -15,6 +16,7 @@ const {
   mockToastError,
 } = vi.hoisted(() => ({
   mockUpdateVariant: vi.fn(),
+  mockApplyDelta: vi.fn(),
   mockMarkUpdated: vi.fn(),
   mockClearUpdated: vi.fn(),
   mockSetProducts: vi.fn(),
@@ -33,17 +35,24 @@ vi.mock('sonner', () => ({
   toast: { error: mockToastError },
 }));
 
-vi.mock('@/store/inventoryStore', () => ({
-  useInventoryStore: (selector: (s: Record<string, unknown>) => unknown) => {
-    const state = {
-      updateVariant: mockUpdateVariant,
-      markUpdated: mockMarkUpdated,
-      clearUpdated: mockClearUpdated,
-      setProducts: mockSetProducts,
-    };
-    return selector(state);
-  },
-}));
+vi.mock('@/store/inventoryStore', () => {
+  const state = {
+    products: [{ variants: [{ id: 'var-1' }] }],
+    updateVariant: mockUpdateVariant,
+    applyDelta: mockApplyDelta,
+    markUpdated: mockMarkUpdated,
+    clearUpdated: mockClearUpdated,
+    setProducts: mockSetProducts,
+  };
+  const useInventoryStore = Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector(state),
+    { getState: () => state }
+  );
+
+  return {
+    useInventoryStore,
+  };
+});
 
 // ── Import after mocks ─────────────────────────────────────────────────────
 
@@ -106,13 +115,22 @@ describe('useInventoryRealtime', () => {
     const updateCallback = mockOnFn.mock.calls[0][2] as (payload: unknown) => void;
 
     updateCallback({
-      new: { id: 'var-1', availableStock: 20, reservedStock: 5, committedStock: 3 },
+      new: {
+        id: 'var-1',
+        availableStock: 20,
+        reservedStock: 5,
+        committedStock: 3,
+        averageCost: 12,
+        price: 24,
+      },
     });
 
     expect(mockUpdateVariant).toHaveBeenCalledWith('var-1', {
       availableStock: 20,
       reservedStock: 5,
       committedStock: 3,
+      averageCost: 12,
+      price: 24,
     });
     expect(mockMarkUpdated).toHaveBeenCalledWith('var-1');
   });

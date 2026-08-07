@@ -7,8 +7,9 @@ export type Period = '7d' | '30d' | '90d';
 
 export async function GET(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
+  const { productId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,7 +24,7 @@ export async function GET(
   const period = (searchParams.get('period') ?? '30d') as Period;
 
   const product = await prisma.product.findFirst({
-    where: { id: params.productId, storeId: store.id },
+    where: { id: productId, storeId: store.id },
     include: {
       variants: {
         include: {
@@ -49,7 +50,7 @@ export async function GET(
   // orderItems is on Variant, not Product — separate query
   const recentEvents = await prisma.orderItem.findMany({
     where: {
-      variant: { productId: params.productId, storeId: store.id },
+      variant: { productId, storeId: store.id },
     },
     include: {
       order: { select: { shopifyOrderId: true, status: true, createdAt: true } },

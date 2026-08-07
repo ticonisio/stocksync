@@ -12,10 +12,11 @@ import { LeadTimeAssigner } from '@/components/lead-time/LeadTimeAssigner';
 import { requireActiveSubscription } from '@/lib/require-subscription';
 
 interface LeadTimePageProps {
-  searchParams: { period?: string };
+  searchParams: Promise<{ period?: string }>;
 }
 
 export default async function LeadTimePage({ searchParams }: LeadTimePageProps) {
+  const query = await searchParams;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
@@ -23,7 +24,7 @@ export default async function LeadTimePage({ searchParams }: LeadTimePageProps) 
   if (!store) redirect('/connect-store');
   await requireActiveSubscription(store.id);
 
-  const period = parsePeriod(searchParams.period);
+  const period = parsePeriod(query.period);
   const items = await getUrgencyItems(store.id, period);
 
   const critical = items.filter((i) => i.status === 'CRÍTICO').length;

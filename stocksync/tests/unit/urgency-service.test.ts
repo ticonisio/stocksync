@@ -95,7 +95,7 @@ describe('getUrgencyItems', () => {
     expect(result).toEqual([]);
   });
 
-  it('ignora produtos sem velocidade (velocity = 0)', async () => {
+  it('classifica produtos sem vendas como OK sem sugerir reposição', async () => {
     mockProductFindMany.mockResolvedValueOnce([
       makeProduct('p1', { variants: [{ id: 'v1', title: 'V1', availableStock: 100 }] }),
     ]);
@@ -104,7 +104,10 @@ describe('getUrgencyItems', () => {
     ]);
 
     const result = await getUrgencyItems('store-1', '30d');
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(
+      expect.objectContaining({ status: 'OK', urgency: Infinity, reorderQty: 0 })
+    );
   });
 
   it('ignora produtos sem lead time configurado', async () => {

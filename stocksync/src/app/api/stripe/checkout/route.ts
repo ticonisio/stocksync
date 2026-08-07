@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { stripe, PLANS, type PlanKey } from '@/lib/stripe';
+import { getStripe, PLANS } from '@/lib/stripe';
+import { z } from 'zod';
+
+const checkoutSchema = z.object({
+  plan: z.enum(['STARTER', 'PRO', 'BUSINESS', 'ENTERPRISE']),
+  interval: z.enum(['monthly', 'yearly']),
+});
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -10,13 +16,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { plan, interval } = body as { plan: PlanKey; interval: 'monthly' | 'yearly' };
+  const parsed = checkoutSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid plan or interval' }, { status: 400 });
+  }
+  const { plan, interval } = parsed.data;
 
   const planConfig = PLANS[plan];
-  if (!planConfig) {
-    return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
-  }
 
   const store = await prisma.store.findFirst({
     where: { userId: session.user.id },
@@ -26,6 +32,8 @@ export async function POST(req: NextRequest) {
   if (!store) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
+
+  const stripe = getStripe();
 
   // Reuse or create Stripe customer
   let customerId = store.stripeCustomerId;

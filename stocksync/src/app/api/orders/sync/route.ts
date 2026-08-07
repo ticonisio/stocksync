@@ -3,8 +3,16 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encrypt';
 import { calculateAndSaveVelocity } from '@/services/velocity/calculateVelocity';
+import { checkAndCreateNotifications } from '@/services/notifications/notification-service';
+import { buildOrdersUrl, getHistoryStartDate } from '@/services/shopify/order-history';
+import { z } from 'zod';
 
-const SHOPIFY_API_VERSION = '2026-01';
+const syncRequestSchema = z.object({
+  mode: z.enum(['incremental', 'history']).default('incremental'),
+  period: z.enum(['30d', '90d', '365d', 'all']).default('90d'),
+});
+
+type SyncRequest = z.infer<typeof syncRequestSchema>;
 
 interface ShopifyOrder {
   id: number;
@@ -31,10 +39,22 @@ function mapFinancialStatus(status: string): 'PAID' | 'CANCELLED' | 'REFUNDED' |
   }
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+
+  let requestData: SyncRequest;
+  try {
+    const rawBody = await req.text();
+    const parsed = syncRequestSchema.safeParse(rawBody ? JSON.parse(rawBody) : {});
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: 'Invalid sync options' }), { status: 400 });
+    }
+    requestData = parsed.data;
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
   }
 
   const store = await prisma.store.findFirst({ where: { userId: session.user.id } });
@@ -44,6 +64,7 @@ export async function POST() {
 
   const token = decrypt(store.accessTokenEncrypted);
   const encoder = new TextEncoder();
+  const syncStartedAt = new Date();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -55,30 +76,33 @@ export async function POST() {
       let skipped = 0;
       let pageInfo: string | null = null;
       let pageNum = 0;
-      const limit = 250;
 
       try {
-        // Phase 1: Import orders (incremental if lastOrderSyncAt exists)
-        const isIncremental = !!store.lastOrderSyncAt;
+        // Phase 1: Import historical orders or fetch only orders created since the last sync.
+        const isHistoryImport = requestData.mode === 'history';
+        const historyStartDate = getHistoryStartDate(requestData.period, syncStartedAt);
         send({
           phase: 'orders',
-          message: isIncremental
-            ? 'Buscando novos pedidos da Shopify...'
-            : 'Buscando todos os pedidos da Shopify...',
+          message: isHistoryImport
+            ? historyStartDate
+              ? `Buscando pedidos desde ${historyStartDate.toLocaleDateString('pt-BR')}...`
+              : 'Buscando todo o histórico de pedidos da Shopify...'
+            : store.lastOrderSyncAt
+              ? 'Buscando novos pedidos da Shopify...'
+              : 'Buscando pedidos da Shopify...',
           imported: 0,
         });
 
         do {
           pageNum++;
-          let url: string;
-          if (pageInfo) {
-            url = `https://${store.shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${limit}&page_info=${pageInfo}`;
-          } else {
-            const base = `https://${store.shopifyDomain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${limit}&status=any`;
-            url = store.lastOrderSyncAt
-              ? `${base}&created_at_min=${store.lastOrderSyncAt.toISOString()}`
-              : base;
-          }
+          const url = buildOrdersUrl({
+            shopifyDomain: store.shopifyDomain,
+            pageInfo,
+            mode: requestData.mode,
+            period: requestData.period,
+            lastOrderSyncAt: store.lastOrderSyncAt,
+            now: syncStartedAt,
+          });
 
           const res: Response = await fetch(url, {
             headers: { 'X-Shopify-Access-Token': token },
@@ -86,8 +110,11 @@ export async function POST() {
           });
 
           if (!res.ok) {
-            send({ phase: 'error', message: `Erro na API Shopify: ${res.status}` });
-            controller.close();
+            const message =
+              res.status === 401 || res.status === 403
+                ? 'A Shopify recusou o acesso aos pedidos. Verifique se o app da loja possui permissão para ler pedidos históricos.'
+                : `Erro ao buscar pedidos na Shopify (HTTP ${res.status}).`;
+            send({ phase: 'error', message });
             return;
           }
 
@@ -129,6 +156,11 @@ export async function POST() {
                 await prisma.orderItem.create({
                   data: { orderId: order.id, variantId: variant.id, quantity: item.quantity },
                 });
+              } else if (existing.quantity !== item.quantity) {
+                await prisma.orderItem.update({
+                  where: { id: existing.id },
+                  data: { quantity: item.quantity },
+                });
               }
               hasItems = true;
             }
@@ -158,7 +190,7 @@ export async function POST() {
 
         send({
           phase: 'orders',
-          message: `${imported} pedidos importados`,
+          message: `${imported} pedidos processados`,
           imported,
           done: true,
         });
@@ -175,20 +207,30 @@ export async function POST() {
           });
         });
 
+        const notifications = await checkAndCreateNotifications(store.id);
+
         send({
           phase: 'velocity',
-          message: 'Velocity calculada com sucesso',
+          message: 'Insights e alertas atualizados com sucesso',
           done: true,
         });
 
-        // Update lastOrderSyncAt for incremental sync next time
+        // Store the time captured before the import so orders created during the run
+        // are included by the next incremental sync.
         await prisma.store.update({
           where: { id: store.id },
-          data: { lastOrderSyncAt: new Date() },
+          data: { lastOrderSyncAt: syncStartedAt },
         });
 
         // Done
-        send({ phase: 'complete', imported, skipped });
+        send({
+          phase: 'complete',
+          imported,
+          skipped,
+          notifications,
+          mode: requestData.mode,
+          period: requestData.period,
+        });
       } catch (err) {
         send({
           phase: 'error',

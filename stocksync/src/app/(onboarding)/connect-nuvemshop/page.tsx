@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft, Clock } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 export default function ConnectNuvemshopPage() {
@@ -11,7 +11,9 @@ export default function ConnectNuvemshopPage() {
           <Clock className="h-5 w-5" />
         </div>
         <div className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Nuvemshop está em preparação</CardTitle>
+          <h1 className="text-2xl font-bold leading-none tracking-tight">
+            Nuvemshop está em preparação
+          </h1>
           <CardDescription>
             A seleção de plataforma já está pronta. A conexão Nuvemshop será ativada quando o fluxo OAuth,
             sincronização e webhooks estiverem implementados.

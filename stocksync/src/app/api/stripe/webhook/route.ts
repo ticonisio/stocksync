@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe, getPlanFromPriceId } from '@/lib/stripe';
+import { getStripe, getPlanFromPriceId } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import type { SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import type Stripe from 'stripe';
@@ -12,12 +12,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET is not configured');
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
+
+  const stripe = getStripe();
+
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -26,16 +34,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await handleEvent(event);
+    await handleEvent(event, stripe);
   } catch (err) {
     console.error('Stripe webhook handler error:', err);
-    // Return 200 to prevent Stripe retries for handler errors
+    // A non-2xx response asks Stripe to retry transient processing failures.
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });
 }
 
-async function handleEvent(event: Stripe.Event) {
+async function handleEvent(event: Stripe.Event, stripe: Stripe) {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -108,7 +117,9 @@ async function upsertSubscription(subscription: Stripe.Subscription) {
   const cancelAtEnd = (subRaw.cancel_at_period_end as boolean) ?? false;
 
   await prisma.subscription.upsert({
-    where: { stripeSubscriptionId: subscription.id },
+    // A store can receive a new Stripe subscription ID after cancelling and
+    // subscribing again. Store is the durable identity in our data model.
+    where: { storeId },
     create: {
       storeId,
       stripeSubscriptionId: subscription.id,
@@ -119,6 +130,7 @@ async function upsertSubscription(subscription: Stripe.Subscription) {
       cancelAtPeriodEnd: cancelAtEnd,
     },
     update: {
+      stripeSubscriptionId: subscription.id,
       stripePriceId: priceId,
       plan: plan as SubscriptionPlan,
       status: mapStripeStatus(subscription.status),

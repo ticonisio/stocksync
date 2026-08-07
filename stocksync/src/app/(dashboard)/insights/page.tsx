@@ -29,10 +29,11 @@ function parsePeriod(raw: string | undefined, allowedPeriods: string[]): Period 
 }
 
 interface InsightsPageProps {
-  searchParams: { period?: string };
+  searchParams: Promise<{ period?: string }>;
 }
 
 export default async function InsightsPage({ searchParams }: InsightsPageProps) {
+  const query = await searchParams;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
@@ -42,7 +43,7 @@ export default async function InsightsPage({ searchParams }: InsightsPageProps) 
 
   const { limits } = await getStoreWithPlan(store.id);
   const allowedPeriods = limits.velocityPeriods;
-  const period = parsePeriod(searchParams.period, allowedPeriods);
+  const period = parsePeriod(query.period, allowedPeriods);
   const periodLabel = PERIOD_LABELS[period];
 
   const velocities = await prisma.salesVelocity.findMany({
